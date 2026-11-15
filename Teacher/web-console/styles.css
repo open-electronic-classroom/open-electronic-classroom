@@ -1279,6 +1279,16 @@ svg {
   outline-offset: 2px;
 }
 
+/* 发送通知 */
+.notice-input {
+  width: 100%;
+  min-height: 62px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
 /* 一键锁屏 */
 .lock-box {
   margin-top: 10px;

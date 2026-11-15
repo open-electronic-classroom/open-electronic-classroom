@@ -246,6 +246,12 @@ class Lab:
                     m["label"] = on
                 self._log("显示机号" if on else "隐藏机号", f"{len(targets)} 台")
 
+            elif action == "notice":
+                text = str(payload.get("text", "")).strip()[:500]
+                if not text:
+                    raise ValueError("empty notice")
+                self._log("发送通知", f"{text} · {len(targets)} 台")
+
             elif action == "proc":
                 process = str(payload.get("process", "")).strip()[:64]
                 rule = self.policy.get("procs") or {}

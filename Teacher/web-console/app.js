@@ -1976,6 +1976,22 @@
   $("#remoteCmdBtn").addEventListener("click", () => openTask("command"));
   $("#collectBtn").addEventListener("click", () => openTask("collect"));
 
+  /* 发送通知：把一段文字广播到所有学生屏幕 */
+  $("#noticeSend").addEventListener("click", () => {
+    const field = $("#noticeText");
+    const text = field.value.trim();
+    if (!text) {
+      toast("通知内容不能为空", "error");
+      field.focus();
+      return;
+    }
+    const target = targetScope();
+    log("发送通知", `${text} → ${target.label}`);
+    toast(`通知已广播 · ${target.label}`);
+    void API.send("notice", [], { text });
+    field.value = "";
+  });
+
   /* 一键让所有机器在各自屏幕上显示机号与 IP */
   let labelOn = false;
 
