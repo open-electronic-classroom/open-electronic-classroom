@@ -376,18 +376,23 @@
     const rowSeg = $("#rowSeg");
     if (rowSeg) {
       const wanted = ["", ...state.groups];
-      const current = [...rowSeg.children].map((b) => b.dataset.row);
+      // 只比较按钮，忽略滑块本身，否则每次都会重建、滑块被重置回第一个
+      const buttons = [...rowSeg.querySelectorAll("button")];
+      const current = buttons.map((b) => b.dataset.row);
       if (current.join("|") !== wanted.join("|")) {
+        const thumb = rowSeg.querySelector(".seg-thumb");
         rowSeg.innerHTML = wanted
           .map((g) => `<button type="button" data-row="${g}"${state.row === g ? ' class="is-active"' : ""}>${g ? `${g} 组` : "全部"}</button>`)
           .join("");
+        if (thumb) rowSeg.insertBefore(thumb, rowSeg.firstChild);
       } else {
-        [...rowSeg.children].forEach((b) => b.classList.toggle("is-active", b.dataset.row === state.row));
+        buttons.forEach((b) => b.classList.toggle("is-active", b.dataset.row === state.row));
       }
     }
 
     $("#sbOnline").textContent = online;
     $("#topOnline").textContent = online;
+    window.requestAnimationFrame(syncAllSegThumbs);
     $("#sbAlert").textContent = alert;
     $("#sbOffline").textContent = offline;
     $("#sbSelected").textContent = selected.length;
@@ -1400,7 +1405,7 @@
   });
 
   window.addEventListener("blur", closeCtx);
-  window.addEventListener("resize", closeCtx);
+  window.addEventListener("resize", () => { closeCtx(); syncAllSegThumbs(); });
   stageBody.addEventListener("scroll", closeCtx);
 
   /* ---------------- 广播 / 电源 ---------------- */
@@ -1752,6 +1757,31 @@
       render();
     });
   });
+
+  /* 分段控件：白色滑块跟随选中项，切换时平滑移动 */
+  function syncSegThumb(seg) {
+    if (!seg) return;
+    let thumb = seg.querySelector(".seg-thumb");
+    if (!thumb) {
+      thumb = document.createElement("span");
+      thumb.className = "seg-thumb";
+      seg.insertBefore(thumb, seg.firstChild);
+    }
+    const active = seg.querySelector(".is-active");
+    if (!active) {
+      thumb.style.opacity = "0";
+      return;
+    }
+    const r = active.getBoundingClientRect();
+    const sr = seg.getBoundingClientRect();
+    thumb.style.opacity = "1";
+    thumb.style.width = `${r.width}px`;
+    thumb.style.transform = `translateX(${r.left - sr.left}px)`;
+  }
+
+  function syncAllSegThumbs() {
+    document.querySelectorAll(".seg").forEach(syncSegThumb);
+  }
 
   function bindSeg(container, key, cast = (v) => v) {
     $(container).addEventListener("click", (event) => {

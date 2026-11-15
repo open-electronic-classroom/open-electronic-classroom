@@ -82,8 +82,7 @@ internal sealed class HostForm : Form
             if (action == "show") RestoreFromTray();
             else if (action == "exit")
             {
-                if (_tray is not null) _tray.Visible = false;
-                Application.Exit();
+                RequestExit();
             }
         });
 
@@ -103,14 +102,14 @@ internal sealed class HostForm : Form
         Activate();
     }
 
-    /// <summary>最小化时收进托盘，而不是留在任务栏。</summary>
-    protected override void OnResize(EventArgs e)
+    private bool _reallyExit;
+
+    /// <summary>点叉收进托盘；只有托盘菜单的“退出”才真正结束进程。</summary>
+    public void RequestExit()
     {
-        base.OnResize(e);
-        if (WindowState == FormWindowState.Minimized)
-        {
-            Hide();
-        }
+        _reallyExit = true;
+        if (_tray is not null) _tray.Visible = false;
+        Application.Exit();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -195,6 +194,17 @@ internal sealed class HostForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         SaveDesignSize();
+
+        // 除了“退出”菜单和关机，其余关闭动作（点叉、Alt+F4、任务栏关闭）都收进托盘
+        if (!_reallyExit
+            && e.CloseReason != CloseReason.ApplicationExitCall
+            && e.CloseReason != CloseReason.WindowsShutDown)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
         base.OnFormClosing(e);
     }
 
