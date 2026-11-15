@@ -17,6 +17,12 @@
     <symbol id="i-blank" viewBox="0 0 24 24"><rect x="2.8" y="4" width="18.4" height="12.5" rx="1.6"/><path d="M8.5 20h7M12 16.5V20M4.6 3.6l14.8 14.8"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10v9.5H3z"/></symbol>
     <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 10h16.8M3.6 14h16.8M12 3.4c2.2 2.4 3.2 5.4 3.2 8.6S14.2 18.2 12 20.6C9.8 18.2 8.8 15.2 8.8 12S9.8 5.8 12 3.4Z"/></symbol>
+    <symbol id="i-media" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9.5 5 2.5-5 2.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="13" rx="2"/><path d="M8 20l4-3.5 4 3.5M7 8h10M7 11.5h6"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="m7 10 2.5 2.2L7 14.4M12.5 14.5h4.5"/></symbol>
+    <symbol id="i-policy" viewBox="0 0 24 24"><path d="M12 3 20 6v5.4c0 4.6-3.2 8.4-8 9.6-4.8-1.2-8-5-8-9.6V6z"/><path d="m8.6 12 2.2 2.2 4.6-4.8"/></symbol>
+    <symbol id="i-answer" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M9.5 9.3a2.5 2.5 0 1 1 3.4 2.3c-.8.35-1.1.85-1.1 1.7M11.9 16.8h.01"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13V6.5A1.5 1.5 0 0 1 4.5 5h15A1.5 1.5 0 0 1 21 6.5V13"/><path d="M3 13h5l1.5 2.5h5L16 13h5v4.5A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></symbol>
     <symbol id="i-app" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.8"/><path d="m10 8.5 5.5 3.5L10 15.5z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-control" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-5.5a1.5 1.5 0 0 1 3 0V11m0-3.5a1.5 1.5 0 0 1 3 0V12m0-2.5a1.5 1.5 0 0 1 3 0v5.8c0 3.4-2.7 6.2-6.1 6.2h-1.4a6 6 0 0 1-4.2-1.7L4.8 16a1.7 1.7 0 0 1 2.4-2.4L8 14.5"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.5-3.3 2.4-5.2 5.5-5.2s5 1.9 5.5 5.2"/><path d="M15 5.2a3.2 3.2 0 0 1 0 6.2M17 14.8c2.2.4 3.3 2 3.5 4.7"/></symbol>
@@ -42,7 +48,7 @@
           第三机房 · A 区
         </span>
         <span class="topbar-div"></span>
-        <span class="status-inline"><i class="led" data-tone="ok"></i>代理在线 12</span>
+        <span class="status-inline"><i class="led" data-tone="ok"></i>学生在线 <span id="topOnline">12</span></span>
         <span class="status-inline"><i class="led" data-tone="warn"></i>异常 2</span>
         <span class="status-inline"><i class="led" data-tone="live" id="castLed" hidden></i><span id="castState">投屏关闭</span></span>
       </div>
@@ -56,14 +62,18 @@
 
     <div class="body">
       <nav class="rail" aria-label="视图与快捷开关">
-        <button type="button" class="rail-btn" data-view="seat" aria-label="座位图" title="座位图">
-          <svg><use href="#i-seat"></use></svg>
-        </button>
         <button type="button" class="rail-btn is-active" data-view="wall" aria-label="监看墙" title="监看墙">
           <svg><use href="#i-wall"></use></svg>
         </button>
+        <button type="button" class="rail-btn" data-view="groups" aria-label="分组管理" title="分组管理">
+          <svg><use href="#i-users"></use></svg>
+        </button>
         <button type="button" class="rail-btn" data-view="list" aria-label="列表" title="列表">
           <svg><use href="#i-list"></use></svg>
+        </button>
+        <span class="rail-div"></span>
+        <button type="button" class="rail-btn" data-view="board" aria-label="白板" title="白板">
+          <svg><use href="#i-board"></use></svg>
         </button>
         <span class="rail-spacer"></span>
         <button type="button" class="rail-btn" id="railSettings" aria-label="设置" title="设置">
@@ -75,53 +85,55 @@
         <div class="actionbar" role="toolbar" aria-label="设备操作">
           <button type="button" class="abtn abtn-primary" id="castToggle">
             <svg><use href="#i-screen"></use></svg>
-            <span id="castToggleLabel">投屏</span>
+            <span id="castToggleLabel">屏幕共享</span>
           </button>
-          <button type="button" class="abtn" data-task="file">
-            <svg><use href="#i-folder"></use></svg>文件发放
+          <button type="button" class="abtn" id="mediaBtn">
+            <svg><use href="#i-media"></use></svg>媒体共享
           </button>
-          <button type="button" class="abtn" data-task="url">
-            <svg><use href="#i-globe"></use></svg>打开网址
-          </button>
-          <button type="button" class="abtn" data-task="app">
-            <svg><use href="#i-app"></use></svg>启动程序
+          <button type="button" class="abtn" id="boardBtn">
+            <svg><use href="#i-board"></use></svg>白板共享
           </button>
           <span class="ab-div"></span>
           <button type="button" class="abtn" id="remoteBtn">
             <svg><use href="#i-control"></use></svg>远程控制
           </button>
-          <button type="button" class="abtn" id="demoBtn">
-            <svg><use href="#i-users"></use></svg>学生演示
+          <button type="button" class="abtn" id="remoteCmdBtn">
+            <svg><use href="#i-terminal"></use></svg>远程指令
+          </button>
+          <button type="button" class="abtn" data-task="file">
+            <svg><use href="#i-folder"></use></svg>文件分发
+          </button>
+          <button type="button" class="abtn" id="collectBtn">
+            <svg><use href="#i-inbox"></use></svg>文件收集
+          </button>
+          <button type="button" class="abtn" id="labelBtn">
+            <svg><use href="#i-screen"></use></svg>显示机号
+          </button>
+          <button type="button" class="abtn" id="quizBtn">
+            <svg><use href="#i-answer"></use></svg>在线答题
           </button>
           <span class="ab-div"></span>
-          <button type="button" class="abtn" id="lockBtn">
-            <svg><use href="#i-lock"></use></svg>锁屏
+          <button type="button" class="abtn" id="policyBarBtn">
+            <svg><use href="#i-policy"></use></svg>策略
           </button>
-          <button type="button" class="abtn" id="blankBtn">
-            <svg><use href="#i-blank"></use></svg>黑屏肃静
-          </button>
-          <span class="ab-div"></span>
-          <button type="button" class="abtn" data-power="on">开机</button>
-          <button type="button" class="abtn" data-power="off">关机</button>
-          <button type="button" class="abtn" data-power="restart">重启</button>
           <span class="ab-right">目标 <b id="targetLabel">全部 10 台</b></span>
         </div>
 
         <div class="toolbar">
-          <div class="seg" id="rowSeg" role="group" aria-label="排筛选">
+          <div class="seg" id="rowSeg" role="group" aria-label="组筛选">
             <button type="button" class="is-active" data-row="">全部</button>
-            <button type="button" data-row="A">A 排</button>
-            <button type="button" data-row="B">B 排</button>
+            <button type="button" data-row="A">A 组</button>
+            <button type="button" data-row="B">B 组</button>
           </div>
           <div class="seg" id="stateSeg" role="group" aria-label="状态筛选">
             <button type="button" class="is-active" data-state="">全部</button>
-            <button type="button" data-state="active">在线</button>
+            <button type="button" data-state="online">在线</button>
             <button type="button" data-state="alert">异常</button>
             <button type="button" data-state="offline">离线</button>
           </div>
           <label class="search">
             <svg><use href="#i-search"></use></svg>
-            <input id="searchInput" type="search" placeholder="机号 / 使用者 / IP" autocomplete="off">
+            <input id="searchInput" type="search" placeholder="搜索" draggable="false" autocomplete="off">
           </label>
           <div class="toolbar-right">
             <button type="button" class="btn btn-sm" id="selectAllBtn">全选</button>
@@ -134,10 +146,10 @@
           <h2 id="stageTitle">座位图</h2>
           <span class="count" id="visibleCount">12 台</span>
           <div class="legend">
-            <span><i class="led" data-tone="ok"></i>使用中</span>
-            <span><i class="led" data-tone="idle"></i>空闲</span>
+            <span><i class="led" data-tone="ok"></i>在线</span>
             <span><i class="led" data-tone="lock"></i>已锁定</span>
             <span><i class="led" data-tone="warn"></i>异常</span>
+            <span><i class="led" data-tone="submit"></i>已提交</span>
             <span><i class="led" data-tone="off"></i>离线</span>
           </div>
         </div>
@@ -146,41 +158,15 @@
 
         <div class="panel-inline" aria-label="集中控制">
           <section class="block">
-            <header class="block-head">
-              <h3>投屏设置</h3>
-              <span class="block-hint" id="castHint">未开始</span>
-            </header>
-            <div class="field">
-              <span class="field-k">来源</span>
-              <div class="seg seg-sm" id="sourceSeg">
-                <button type="button" class="is-active" data-source="teacher">教师机</button>
-                <button type="button" data-source="student">学生机</button>
-              </div>
-            </div>
-            <div class="field">
-              <span class="field-k">范围</span>
-              <div class="seg seg-sm" id="scopeSeg">
-                <button type="button" class="is-active" data-scope="all">全部</button>
-                <button type="button" data-scope="selected">选中</button>
-              </div>
-            </div>
-            <div class="block-actions" id="castActions" hidden>
-              <span class="dirty-flag">未保存</span>
-              <button type="button" class="btn btn-sm" id="castCancel">取消</button>
-              <button type="button" class="btn btn-sm btn-primary" id="castSave">保存</button>
-            </div>
-          </section>
-
-          <section class="block">
             <header class="block-head"><h3>管控</h3></header>
             <label class="row">
-              <span class="row-k">锁定外设</span>
+              <span class="row-k">禁止 USB 传输</span>
               <input type="checkbox" class="sw" id="swUsb">
               <span class="sw-ui"></span>
             </label>
             <label class="row">
-              <span class="row-k">禁止安装</span>
-              <input type="checkbox" class="sw" id="swInstall" checked>
+              <span class="row-k">禁止联网</span>
+              <input type="checkbox" class="sw" id="swOffline">
               <span class="sw-ui"></span>
             </label>
             <label class="row">
@@ -188,7 +174,13 @@
               <input type="checkbox" class="sw" id="swInternet" checked>
               <span class="sw-ui"></span>
             </label>
-            <button type="button" class="btn btn-block" id="policyBtn">访问白名单…</button>
+            <button type="button" class="btn btn-block" id="policyBtn">访问限制策略…</button>
+
+            <div class="lock-box">
+              <label class="field-k" for="lockMessage">锁屏显示内容</label>
+              <input class="input" id="lockMessage" type="text" value="上课中，请勿操作" maxlength="60" aria-label="锁屏显示内容">
+              <button type="button" class="btn btn-block" id="lockToggleBtn">一键锁屏</button>
+            </div>
           </section>
 
           <section class="block">
@@ -237,29 +229,175 @@
     </form>
   </dialog>
 
+  <dialog class="modal modal-sm" id="groupDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>新建分组</h2>
+      </header>
+      <div class="modal-body">
+        <input class="input" id="groupField" type="text" maxlength="8" autocomplete="off" placeholder="分组名称" draggable="false">
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="groupSave">保存</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="renameDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>重命名</h2>
+        <span class="modal-hint" id="renameHint">PC-01</span>
+      </header>
+      <div class="modal-body">
+        <input class="input" id="renameField" type="text" maxlength="16" autocomplete="off" draggable="false" aria-label="机号">
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="renameSave">保存</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="confirmDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2 id="confirmTitle">确认</h2>
+      </header>
+      <div class="modal-body">
+        <p class="note" id="confirmText"></p>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="confirmOk">确认</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="mediaDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>媒体共享</h2>
+        <span class="modal-hint" id="mediaHint"></span>
+      </header>
+      <div class="modal-body">
+        <label class="drop" id="mediaDrop">
+          <span id="mediaLabel">选择文件</span>
+          <input type="file" id="mediaInput" accept="video/*,audio/*,image/*" hidden>
+        </label>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="mediaStart">投放</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="terminalDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>远程指令</h2>
+        <span class="modal-hint" id="termHost">PC-01</span>
+      </header>
+      <div class="modal-body">
+        <pre class="term" id="termOut"></pre>
+        <div class="term-input">
+          <span class="term-prompt">C:\&gt;</span>
+          <input id="termField" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="命令">
+          <button type="button" class="btn btn-sm" id="termSend">发送</button>
+        </div>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>关闭</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="remoteDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>远程控制</h2>
+      </header>
+      <div class="modal-body">
+        <div class="pick-list" id="remoteList"></div>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog class="modal" id="policyDialog">
     <form method="dialog" class="modal-box">
       <header class="modal-head">
-        <h2>访问白名单</h2>
+        <h2>策略</h2>
         <span class="modal-hint">
           <span class="dirty-flag" id="policyDirty" hidden>未保存 ·</span>
           <span id="policyHint">同步至在线 10 台</span>
         </span>
       </header>
       <div class="modal-body">
-        <div class="tag-input" id="tagInput">
-          <input id="tagInputField" type="text" placeholder="输入域名后按回车" autofocus>
+        <div class="seg" id="policyTabSeg" role="tablist" aria-label="策略分类">
+          <button type="button" class="is-active" data-tab="access">访问限制</button>
+          <button type="button" data-tab="proc">异常程序</button>
         </div>
-        <label class="row row-block">
-          <span class="row-k">阻止白名单外的网站</span>
-          <input type="checkbox" class="sw" id="policyBlock" checked>
-          <span class="sw-ui"></span>
-        </label>
-        <label class="row row-block">
+
+        <div id="policyAccessPane">
+        <div class="field-block">
+          <span class="field-k">限制方式</span>
+          <div class="seg" id="policyModeSeg" role="group" aria-label="限制方式">
+            <button type="button" class="is-active" data-mode="whitelist">白名单</button>
+            <button type="button" data-mode="blacklist">黑名单</button>
+            <button type="button" data-mode="blockall">完全禁止</button>
+          </div>
+        </div>
+
+        <div class="field-block" id="policyListBlock">
+          <span class="field-k">预设</span>
+          <div class="preset-row">
+            <select class="input" id="presetSelect" aria-label="预设"></select>
+            <button type="button" class="btn btn-sm" id="presetDelete" disabled>删除</button>
+          </div>
+          <div class="preset-save">
+            <input class="input" id="presetName" type="text" placeholder="预设名称" maxlength="20" draggable="false" aria-label="预设名称">
+            <button type="button" class="btn btn-sm" id="presetSave">存为预设</button>
+          </div>
+
+          <div class="field-label-row">
+            <label class="field-label" id="sitesLabel" for="tagInputField">允许访问的网站</label>
+            <span class="field-tip">点击域名即可删除</span>
+          </div>
+          <div class="tag-input" id="tagInput">
+            <input id="tagInputField" type="text" placeholder="域名" draggable="false" autofocus>
+          </div>
+        </div>
+
+
+        <label class="row row-block" id="policyLogRow">
           <span class="row-k">记录访问日志</span>
           <input type="checkbox" class="sw" id="policyLog">
           <span class="sw-ui"></span>
         </label>
+        </div>
+
+        <div id="policyProcPane" hidden>
+          <div class="field-label-row">
+            <span class="field-label">检测的进程</span>
+            <span class="field-tip">点击名称即可删除</span>
+          </div>
+          <div class="tag-input" id="procTags">
+            <input id="procField" type="text" placeholder="进程名" draggable="false">
+          </div>
+
+          <div class="field-block field-block-tight">
+            <span class="field-k">处理方式</span>
+            <div class="seg seg-fit" id="procModeSeg" role="group" aria-label="处理方式">
+              <button type="button" class="is-active" data-proc="block">直接拦截</button>
+              <button type="button" data-proc="report">记录后手动处理</button>
+            </div>
+          </div>
+        </div>
       </div>
       <footer class="modal-foot">
         <button type="button" class="btn" data-close>取消</button>

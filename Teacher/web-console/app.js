@@ -1,37 +1,37 @@
 (() => {
   /* ---------------- 数据 ---------------- */
   let MACHINES = [
-    { id: "PC-01", user: "陈一诺", ip: "192.168.10.11", row: "A", state: "active" },
-    { id: "PC-02", user: "林小满", ip: "192.168.10.12", row: "A", state: "active" },
-    { id: "PC-03", user: "周予安", ip: "192.168.10.13", row: "A", state: "locked" },
-    { id: "PC-04", user: "许星河", ip: "192.168.10.14", row: "A", state: "alert" },
-    { id: "PC-05", user: "沈知夏", ip: "192.168.10.15", row: "A", state: "idle" },
-    { id: "PC-06", user: "", ip: "192.168.10.16", row: "A", state: "offline" },
-    { id: "PC-07", user: "唐可欣", ip: "192.168.10.17", row: "B", state: "active" },
-    { id: "PC-08", user: "贺嘉树", ip: "192.168.10.18", row: "B", state: "active" },
-    { id: "PC-09", user: "江语澄", ip: "192.168.10.19", row: "B", state: "idle" },
-    { id: "PC-10", user: "陆景行", ip: "192.168.10.20", row: "B", state: "alert" },
-    { id: "PC-11", user: "苏念安", ip: "192.168.10.21", row: "B", state: "active" },
-    { id: "PC-12", user: "", ip: "192.168.10.22", row: "B", state: "offline" }
+    { id: "PC-01", ip: "192.168.10.11", row: "A", state: "online", task: "第二套 · 循环结构", submitted: false },
+    { id: "PC-02", ip: "192.168.10.12", row: "A", state: "submitted", task: "第二套 · 循环结构", submitted: true },
+    { id: "PC-03", ip: "192.168.10.13", row: "A", state: "locked" },
+    { id: "PC-04", ip: "192.168.10.14", row: "A", state: "alert", alert: "检测到非教学程序：game.exe" },
+    { id: "PC-05", ip: "192.168.10.15", row: "A", state: "online" },
+    { id: "PC-06", ip: "192.168.10.16", row: "A", state: "offline" },
+    { id: "PC-07", ip: "192.168.10.17", row: "B", state: "online", task: "第二套 · 循环结构", submitted: false },
+    { id: "PC-08", ip: "192.168.10.18", row: "B", state: "online" },
+    { id: "PC-09", ip: "192.168.10.19", row: "B", state: "submitted", task: "第二套 · 循环结构", submitted: true },
+    { id: "PC-10", ip: "192.168.10.20", row: "B", state: "alert", alert: "检测到非教学程序：minigame.exe" },
+    { id: "PC-11", ip: "192.168.10.21", row: "B", state: "online" },
+    { id: "PC-12", ip: "192.168.10.22", row: "B", state: "offline" }
   ];
 
   const STATE_LABEL = {
-    active: "使用中",
-    idle: "空闲",
+    online: "在线",
     locked: "已锁定",
     alert: "异常",
+    submitted: "已提交",
     offline: "离线"
   };
 
   const STATE_TONE = {
-    active: "ok",
-    idle: "idle",
+    online: "ok",
     locked: "lock",
     alert: "warn",
+    submitted: "submit",
     offline: "off"
   };
 
-  const VIEW_TITLE = { seat: "座位图", wall: "监看墙", list: "机器列表" };
+  const VIEW_TITLE = { groups: "分组管理", wall: "监看墙", list: "机器列表", board: "白板" };
 
   const state = {
     view: "wall",
@@ -40,11 +40,22 @@
     query: "",
     columns: 0,
     casting: false,
+    media: false,
+    board: false,
     blank: false,
     source: "teacher",
-    scope: "all",
-    whitelist: ["edu.cn", "python.org", "code.org", "khanacademy.org"],
-    policy: { block: true, log: false },
+    sites: ["edu.cn", "python.org", "code.org", "khanacademy.org"],
+    presets: [
+      { name: "教学白名单", mode: "whitelist", sites: ["edu.cn", "python.org", "code.org", "khanacademy.org"] },
+      { name: "课间黑名单", mode: "blacklist", sites: ["game.example.com", "tiktok.com"] }
+    ],
+    policy: { usb: false, blockNet: false, block: true, mode: "whitelist", preset: "教学白名单", log: false, procs: { mode: "block", list: ["game.exe"] } },
+    locked: false,
+    groups: ["A", "B"],
+    strokes: [],
+    collapsed: new Set(),
+    brush: { color: "#0f172a", width: 4, eraser: false },
+    lockMessage: "上课中，请勿操作",
     settings: { defaultSource: "整个屏幕", columns: "自动" },
     selected: new Set(["PC-01"]),
     log: []
@@ -62,6 +73,12 @@
   const taskDialog = $("#taskDialog");
   const policyDialog = $("#policyDialog");
   const settingsDialog = $("#settingsDialog");
+  const remoteDialog = $("#remoteDialog");
+  const termDialog = $("#terminalDialog");
+  const mediaDialog = $("#mediaDialog");
+  const confirmDialog = $("#confirmDialog");
+  const renameDialog = $("#renameDialog");
+  const groupDialog = $("#groupDialog");
 
   /* ---------------- 后端接口 ----------------
      以 http(s) 打开时走后端（Python server），直接双击本地文件时自动退化为纯前端演示。 */
@@ -126,19 +143,53 @@
       state.selected = new Set([...state.selected].filter((id) => ids.has(id)));
     }
 
+    if (Array.isArray(snapshot.groups)) {
+      state.groups = [...snapshot.groups];
+    }
+
     if (snapshot.casting) {
       state.casting = Boolean(snapshot.casting.on);
       if (snapshot.casting.source) state.source = snapshot.casting.source;
-      if (snapshot.casting.scope) state.scope = snapshot.casting.scope;
-      castDraft = { source: state.source, scope: state.scope };
     }
 
     if (snapshot.policy) {
-      state.whitelist = [...(snapshot.policy.whitelist || [])];
+      state.sites = [...(snapshot.policy.sites || [])];
+      if (Array.isArray(snapshot.policy.presets)) {
+        state.presets = snapshot.policy.presets.map((p) => ({
+          name: String(p.name || ""),
+          mode: p.mode === "blacklist" ? "blacklist" : "whitelist",
+          sites: [...(p.sites || [])]
+        }));
+      }
       state.policy = {
+        usb: Boolean(snapshot.policy.usb),
+        blockNet: Boolean(snapshot.policy.blockNet),
         block: Boolean(snapshot.policy.block),
-        log: Boolean(snapshot.policy.log)
+        mode: ["whitelist", "blacklist", "blockall"].includes(snapshot.policy.mode)
+          ? snapshot.policy.mode
+          : "whitelist",
+        preset: snapshot.policy.preset || "",
+        log: Boolean(snapshot.policy.log),
+        procs: {
+          mode: snapshot.policy.procs?.mode === "report" ? "report" : "block",
+          list: [...(snapshot.policy.procs?.list || [])]
+        }
       };
+    }
+
+    // 白板：只有共享中才以服务端为准，否则保留本地画稿
+    if (state.board && snapshot.whiteboard && Array.isArray(snapshot.whiteboard.strokes)) {
+      state.strokes = snapshot.whiteboard.strokes.map((stroke) => ({
+        color: stroke.color,
+        width: stroke.width,
+        points: stroke.points || []
+      }));
+      if (state.view === "board") paintBoard();
+    }
+
+    if (snapshot.screen_lock) {
+      state.locked = Boolean(snapshot.screen_lock.on);
+      if (snapshot.screen_lock.message) state.lockMessage = snapshot.screen_lock.message;
     }
 
     if (snapshot.settings) {
@@ -158,7 +209,8 @@
 
   // 传给后端的机器集合：范围=选中且确实有选中时给 id 列表，否则空数组表示全部
   function targetIds() {
-    return state.scope === "selected" && state.selected.size ? [...state.selected] : [];
+    // 投屏与批量指令一律面向全部在线机器；单机操作走右键菜单
+    return [];
   }
 
   /* ---------------- 工具 ---------------- */
@@ -189,7 +241,12 @@
       const action = document.createElement("b");
       action.textContent = entry.action;
       li.append(time, action);
-      if (entry.detail) li.append(document.createTextNode(entry.detail));
+      if (entry.detail) {
+        const detail = document.createElement("span");
+        detail.className = "log-detail";
+        detail.textContent = entry.detail;
+        li.append(detail);
+      }
       logList.appendChild(li);
     });
   }
@@ -207,7 +264,7 @@
   const byId = (id) => MACHINES.find((m) => m.id === id);
   const stateMatches = (m) => {
     if (!state.machineState) return true;
-    if (state.machineState === "active") return m.state !== "offline";
+    if (state.machineState === "online") return m.state === "online";
     return m.state === state.machineState;
   };
   const visibleMachines = () =>
@@ -215,15 +272,12 @@
       if (state.row && m.row !== state.row) return false;
       if (!stateMatches(m)) return false;
       if (!state.query) return true;
-      return `${m.id} ${m.user} ${m.ip} ${STATE_LABEL[m.state]}`.toLowerCase().includes(state.query);
+      return `${m.id} ${m.ip} ${STATE_LABEL[m.state]}`.toLowerCase().includes(state.query);
     });
 
   const selectedMachines = () => MACHINES.filter((m) => state.selected.has(m.id));
 
   function targetScope() {
-    if (state.scope === "selected" && state.selected.size) {
-      return { machines: selectedMachines(), label: `选中 ${state.selected.size} 台` };
-    }
     const online = MACHINES.filter((m) => m.state !== "offline");
     return { machines: online, label: `全部 ${online.length} 台` };
   }
@@ -236,7 +290,7 @@
     el.dataset.id = m.id;
     el.dataset.state = m.state;
     el.setAttribute("aria-pressed", String(state.selected.has(m.id)));
-    el.title = `${m.id} · ${m.user || "未登录"} · ${m.ip} · ${STATE_LABEL[m.state]}`;
+    el.title = `${m.id} · ${m.ip} · ${STATE_LABEL[m.state]}`;
     if (state.selected.has(m.id)) el.classList.add("is-selected");
 
     el.innerHTML = `
@@ -245,7 +299,7 @@
         <span class="seat-id">${m.id}</span>
         <span class="seat-state">${STATE_LABEL[m.state]}</span>
       </span>
-      <span class="seat-user">${m.user || "未登录"}</span>
+      <span class="seat-user">${m.ip}</span>
       <span class="seat-meta">${m.ip}</span>
     `;
     return el;
@@ -258,65 +312,39 @@
     el.dataset.id = m.id;
     el.dataset.state = m.state;
     el.setAttribute("aria-pressed", String(state.selected.has(m.id)));
-    el.title = `${m.id} · ${m.user || "未登录"} · ${STATE_LABEL[m.state]}`;
+    el.title = `${m.id} · ${m.ip}`;
     if (state.selected.has(m.id)) el.classList.add("is-selected");
+
+    const chip = (() => {
+      if (m.state === "alert") {
+        return { text: "异常", state: "alert", tip: m.alert || "异常" };
+      }
+      if (m.task) {
+        return m.submitted
+          ? { text: "已提交", state: "submitted", tip: `已提交 · ${m.task}` }
+          : { text: "未提交", state: "pending", tip: `未提交 · ${m.task}` };
+      }
+      return { text: STATE_LABEL[m.state], state: m.state, tip: "" };
+    })();
 
     el.innerHTML = `
       <span class="mon-screen">
         <i class="sk sk-1"></i><i class="sk sk-2"></i><i class="sk sk-3"></i>
         <i class="sk sk-4"></i><i class="sk sk-5"></i>
+        ${m.label ? `<span class="mon-label-tag"><b>${m.id}</b><span>${m.ip}</span></span>` : ""}
       </span>
       <span class="mon-label">
         <i class="led" data-tone="${STATE_TONE[m.state]}"></i>${m.id}
-        <span class="mon-name">${m.user || "未登录"}</span>
+        <span class="mon-name">${m.ip}</span>
+        <span class="mon-chip" data-state="${chip.state}"${chip.tip ? ` data-tip="${chip.tip}"` : ""}>${chip.text}</span>
       </span>
     `;
     return el;
   }
 
-  function renderSeats(list) {
-    const grid = document.createElement("div");
-    grid.className = "seat-grid";
-    if (state.columns) grid.style.gridTemplateColumns = `repeat(${state.columns}, minmax(0, 1fr))`;
-    list.forEach((m) => grid.appendChild(seatEl(m)));
-    stageBody.appendChild(grid);
-  }
-
-  function renderWall(list) {
-    const wall = document.createElement("div");
-    wall.className = "wall";
-    list.forEach((m) => wall.appendChild(monEl(m)));
-    stageBody.appendChild(wall);
-  }
-
-  function renderList(list) {
-    const table = document.createElement("table");
-    table.className = "tbl";
-    table.innerHTML = `
-      <thead>
-        <tr><th>机号</th><th>使用者</th><th>IPv4</th><th>状态</th><th>排</th></tr>
-      </thead>
-      <tbody></tbody>
-    `;
-    const body = table.querySelector("tbody");
-    list.forEach((m) => {
-      const tr = document.createElement("tr");
-      tr.dataset.id = m.id;
-      tr.dataset.state = m.state;
-      if (state.selected.has(m.id)) tr.classList.add("is-selected");
-      tr.innerHTML = `
-        <td class="cell-mono">${m.id}</td>
-        <td>${m.user || "<span class=\"cell-mono\">未登录</span>"}</td>
-        <td class="cell-mono">${m.ip}</td>
-        <td><span class="state-pill" data-state="${m.state}"><i class="led" data-tone="${STATE_TONE[m.state]}"></i>${STATE_LABEL[m.state]}</span></td>
-        <td class="cell-mono">${m.row}</td>
-      `;
-      body.appendChild(tr);
-    });
-    stageBody.appendChild(table);
-  }
-
   function render() {
+    // 行内编辑已在画面上时不再重建，避免输入框被换掉；首次渲染仍需放行
+    if (inlineEdit && stageBody.querySelector("#inlineInput, #inlineGroup")) return;
     const list = visibleMachines();
     stageBody.innerHTML = "";
     if (!list.length) {
@@ -324,12 +352,17 @@
       empty.className = "empty";
       empty.textContent = "没有匹配的机器";
       stageBody.appendChild(empty);
-    } else if (state.view === "seat") renderSeats(list);
+    } else if (state.view === "groups") renderGroups();
     else if (state.view === "wall") renderWall(list);
+    else if (state.view === "board") renderBoardSection();
     else renderList(list);
 
     stageTitle.textContent = VIEW_TITLE[state.view];
-    visibleCount.textContent = `${list.length} / ${MACHINES.length} 台`;
+    const isBoard = state.view === "board";
+    visibleCount.hidden = isBoard;
+    const legend = document.querySelector(".legend");
+    if (legend) legend.hidden = isBoard;
+    if (!isBoard) visibleCount.textContent = `${list.length} / ${MACHINES.length} 台`;
     renderChrome();
   }
 
@@ -339,7 +372,22 @@
     const offline = MACHINES.length - online;
     const selected = selectedMachines();
 
+    // 组筛选跟着分组列表走
+    const rowSeg = $("#rowSeg");
+    if (rowSeg) {
+      const wanted = ["", ...state.groups];
+      const current = [...rowSeg.children].map((b) => b.dataset.row);
+      if (current.join("|") !== wanted.join("|")) {
+        rowSeg.innerHTML = wanted
+          .map((g) => `<button type="button" data-row="${g}"${state.row === g ? ' class="is-active"' : ""}>${g ? `${g} 组` : "全部"}</button>`)
+          .join("");
+      } else {
+        [...rowSeg.children].forEach((b) => b.classList.toggle("is-active", b.dataset.row === state.row));
+      }
+    }
+
     $("#sbOnline").textContent = online;
+    $("#topOnline").textContent = online;
     $("#sbAlert").textContent = alert;
     $("#sbOffline").textContent = offline;
     $("#sbSelected").textContent = selected.length;
@@ -361,19 +409,613 @@
       });
     }
 
-    paintCastSegs();
-    $("#castHint").classList.toggle("is-live", state.casting);
-
     const castToggle = $("#castToggle");
-    $("#castToggleLabel").textContent = state.casting ? "停止投屏" : "投屏";
+    $("#castToggleLabel").textContent = state.casting ? "结束共享" : "屏幕共享";
     castToggle.classList.toggle("is-on", state.casting);
     castToggle.classList.toggle("abtn-primary", !state.casting);
 
-    $("#castState").textContent = state.casting ? "投屏中" : "投屏关闭";
+    $("#castState").textContent = state.casting ? `屏幕共享 · ${castSourceLabel()}` : "未共享";
     $("#castLed").hidden = !state.casting;
-    $("#blankBtn").classList.toggle("is-on", state.blank);
     $("#policyHint").textContent = `同步至在线 ${online} 台`;
+
+    $("#swUsb").checked = state.policy.usb;
+    $("#swOffline").checked = state.policy.blockNet;
+    $("#swInternet").checked = state.policy.block;
+
+    const lockBtn = $("#lockToggleBtn");
+    lockBtn.textContent = state.locked ? "解除锁屏" : "一键锁屏";
+    lockBtn.classList.toggle("is-alert", state.locked);
+    // 输入框正在编辑时不要被后端推送覆盖
+    const lockInput = $("#lockMessage");
+    if (document.activeElement !== lockInput) lockInput.value = state.lockMessage;
     $("#targetLabel").textContent = targetScope().label;
+  }
+  function renderWall(list) {
+    const wall = document.createElement("div");
+    wall.className = "wall";
+
+    // 按排分组，组头可折叠
+    const groups = new Map();
+    list.forEach((m) => {
+      const key = m.row || "-";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
+    });
+
+    [...groups.keys()].sort().forEach((row) => {
+      const machines = groups.get(row);
+      const collapsed = state.collapsed.has(row);
+
+      const section = document.createElement("section");
+      section.className = `group${collapsed ? " is-collapsed" : ""}`;
+
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = "group-head";
+      head.dataset.group = row;
+      head.setAttribute("aria-expanded", String(!collapsed));
+      head.innerHTML = `
+        <span class="group-caret"></span>
+        <span class="group-name">${row === "-" ? "未分组" : `${row} 组`}</span>
+        <span class="group-line"></span>
+        <span class="group-count">${machines.length} 台</span>
+      `;
+      section.appendChild(head);
+
+      if (!collapsed) {
+        const grid = document.createElement("div");
+        grid.className = "group-grid";
+        machines.forEach((m) => grid.appendChild(monEl(m)));
+        section.appendChild(grid);
+      }
+
+      wall.appendChild(section);
+    });
+
+    stageBody.appendChild(wall);
+  }
+
+  function renderList(list) {
+    const table = document.createElement("table");
+    table.className = "tbl";
+    table.innerHTML = `
+      <colgroup>
+        <col style="width: 32%"><col style="width: 28%"><col style="width: 22%"><col style="width: 18%">
+      </colgroup>
+      <thead>
+        <tr><th>计算机名称</th><th>IPv4</th><th>状态</th><th>组</th></tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const body = table.querySelector("tbody");
+    const pencil = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 2.3 13.7 4.6 5.9 12.4 2.6 13.4 3.6 10.1z"></path></svg>';
+
+    list.forEach((m) => {
+      const tr = document.createElement("tr");
+      tr.dataset.id = m.id;
+      tr.dataset.state = m.state;
+      if (state.selected.has(m.id)) tr.classList.add("is-selected");
+
+      const editingName = inlineEdit && inlineEdit.id === m.id && inlineEdit.kind === "name";
+      const editingGroup = inlineEdit && inlineEdit.id === m.id && inlineEdit.kind === "group";
+
+      const nameCell = editingName
+        ? '<input class="inline-edit" id="inlineInput" value="" draggable="false">'
+        : `<span class="cell-name">${m.id}</span><button type="button" class="pencil" data-edit="name">${pencil}</button>`;
+
+      const groupCell = editingGroup
+        ? '<select class="inline-edit" id="inlineGroup"></select>'
+        : `<span class="cell-name">${m.row}</span><button type="button" class="pencil" data-edit="group">${pencil}</button>`;
+
+      tr.innerHTML = `
+        <td class="cell-mono">${nameCell}</td>
+        <td class="cell-mono">${m.ip}</td>
+        <td><span class="state-pill" data-state="${m.state}"><i class="led" data-tone="${STATE_TONE[m.state]}"></i>${STATE_LABEL[m.state]}</span></td>
+        <td class="cell-mono">${groupCell}</td>
+      `;
+
+      tr.querySelectorAll(".pencil").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const kind = button.dataset.edit;
+          inlineEdit = {
+            id: m.id,
+            kind,
+            value: kind === "name" ? m.id : m.row
+          };
+          render();
+        });
+      });
+
+      body.appendChild(tr);
+    });
+
+    // 行内编辑控件
+    const input = table.querySelector("#inlineInput");
+    if (input) {
+      input.value = inlineEdit.value;
+      window.setTimeout(() => input.focus(), 0);
+
+      input.addEventListener("input", () => { inlineEdit.value = input.value; });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const target = inlineEdit.id;
+          const value = input.value.trim();
+          inlineEdit = null;
+          renameMachine(target, value);
+          render();
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          inlineEdit = null;
+          render();
+        }
+      });
+      input.addEventListener("blur", () => {
+        if (!inlineEdit) return;
+        const target = inlineEdit.id;
+        const value = input.value.trim();
+        inlineEdit = null;
+        renameMachine(target, value);
+        render();
+      });
+    }
+
+    const select = table.querySelector("#inlineGroup");
+    if (select) {
+      ["A", "B", "C", "D"].forEach((group) => {
+        const option = document.createElement("option");
+        option.value = group;
+        option.textContent = `${group} 组`;
+        select.appendChild(option);
+      });
+      select.value = inlineEdit.value;
+      window.setTimeout(() => select.focus(), 0);
+
+      select.addEventListener("change", () => {
+        const machine = byId(inlineEdit.id);
+        const group = select.value;
+        inlineEdit = null;
+        if (machine) {
+          machine.row = group;
+          log("修改分组", `${machine.id} → ${group} 组`);
+          void API.send("group", [machine.id], { group });
+        }
+        render();
+      });
+
+    }
+
+    stageBody.appendChild(table);
+  }
+
+  /* 双击打开独立的远程控制窗口 */
+  function openRemoteWindow(id) {
+    const url = new URL("remote.html", location.href);
+    url.searchParams.set("pc", id);
+    window.open(url.toString(), `remote-${id}`, "width=2200,height=1520");
+    log("打开远程窗口", id);
+  }
+
+  /* 重命名：弹窗与列表行内编辑共用 */
+  let renameTarget = null;
+
+  function renameMachine(from, value) {
+    if (!value || value === from) return false;
+    if (MACHINES.some((m) => m.id === value)) {
+      toast(`计算机名称 ${value} 已存在`);
+      return false;
+    }
+    const machine = byId(from);
+    if (!machine) return false;
+
+    machine.id = value;
+    if (state.selected.has(from)) {
+      state.selected.delete(from);
+      state.selected.add(value);
+    }
+    if (anchorId === from) anchorId = value;
+    if (ctxMachine === from) ctxMachine = value;
+
+    log("重命名", `${from} → ${value}`);
+    void API.send("rename", [], { from, to: value });
+    return true;
+  }
+
+  function openRename(id) {
+    const machine = byId(id);
+    if (!machine) return;
+    renameTarget = machine.id;
+    $("#renameHint").textContent = `当前：${machine.id}`;
+    $("#renameField").value = machine.id;
+    openDialog(renameDialog);
+    window.setTimeout(() => $("#renameField").focus(), 60);
+  }
+
+  function saveRename() {
+    const value = $("#renameField").value.trim();
+    if (!value) {
+      toast("名称不能为空");
+      return;
+    }
+    if (value === renameTarget) {
+      closeDialog(renameDialog);
+      return;
+    }
+    if (!renameMachine(renameTarget, value)) return;
+    closeDialog(renameDialog);
+    render();
+  }
+
+  $("#renameSave").addEventListener("click", saveRename);
+  $("#renameField").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveRename();
+    }
+  });
+
+  /* ---------------- 分组管理 ---------------- */
+  function renderGroups() {
+    const wrap = document.createElement("div");
+    wrap.className = "groups-wrap";
+
+    const head = document.createElement("div");
+    head.className = "groups-head";
+    head.innerHTML = `
+      <button type="button" class="btn btn-sm" id="groupAddBtn">新建分组</button>
+      <span class="groups-hint">把机器拖到分组框里即可归组</span>
+    `;
+    wrap.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "groups-grid";
+
+    const buckets = new Map();
+    state.groups.forEach((g) => buckets.set(g, []));
+    MACHINES.forEach((m) => {
+      const key = m.row || "";
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(m);
+    });
+
+    if (!buckets.has("")) buckets.set("", []);
+    const order = ["", ...state.groups];   // 未分组排在最前
+
+    order.forEach((name) => {
+      const machines = buckets.get(name) || [];
+      const card = document.createElement("section");
+      card.className = "group-card";
+      card.dataset.group = name;
+
+      const title = document.createElement("div");
+      title.className = "group-card-head";
+      title.innerHTML = `
+        <span>${name ? `${name} 组` : "未分组"}</span>
+        <span class="count">${machines.length} 台</span>
+        ${name ? `<button type="button" class="del" data-remove="${name}" title="删除分组">✕</button>` : ""}
+      `;
+      card.appendChild(title);
+
+      const chips = document.createElement("div");
+      chips.className = "group-chips";
+      if (!machines.length) {
+        const empty = document.createElement("span");
+        empty.className = "group-empty";
+        empty.textContent = "拖机器到这里";
+        chips.appendChild(empty);
+      }
+      machines.forEach((m) => {
+        const chip = document.createElement("span");
+        chip.className = "mchip";
+        chip.draggable = true;
+        chip.dataset.machine = m.id;
+        chip.dataset.state = m.state;
+        chip.textContent = m.id;
+        chip.addEventListener("dragstart", (event) => {
+          event.dataTransfer.setData("text/plain", m.id);
+          event.dataTransfer.effectAllowed = "move";
+        });
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+
+      card.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        card.classList.add("is-over");
+      });
+      card.addEventListener("dragleave", () => card.classList.remove("is-over"));
+      card.addEventListener("drop", (event) => {
+        event.preventDefault();
+        card.classList.remove("is-over");
+        const id = event.dataTransfer.getData("text/plain");
+        const machine = byId(id);
+        if (!machine || machine.row === name) return;
+        machine.row = name;
+        log("修改分组", `${machine.id} → ${name || "未分组"}`);
+        void API.send("group", [machine.id], { group: name });
+        render();
+      });
+
+      const delBtn = title.querySelector("[data-remove]");
+      if (delBtn) {
+        delBtn.addEventListener("click", () => {
+          const group = delBtn.dataset.remove;
+          askConfirm(
+            {
+              title: "删除分组",
+              text: `删除「${group} 组」？组内机器会转入未分组。`,
+              ok: "删除"
+            },
+            () => {
+              state.groups = state.groups.filter((g) => g !== group);
+              MACHINES.forEach((m) => { if (m.row === group) m.row = ""; });
+              log("删除分组", group);
+              void API.send("group-remove", [], { name: group });
+              render();
+            }
+          );
+        });
+      }
+
+      grid.appendChild(card);
+    });
+
+    wrap.appendChild(grid);
+    stageBody.appendChild(wrap);
+
+    $("#groupAddBtn").addEventListener("click", () => {
+      $("#groupField").value = "";
+      openDialog(groupDialog);
+      window.setTimeout(() => $("#groupField").focus(), 60);
+    });
+  }
+
+  $("#groupSave").addEventListener("click", () => {
+    const name = $("#groupField").value.trim().toUpperCase().slice(0, 8);
+    if (!name) {
+      toast("分组名称不能为空");
+      return;
+    }
+    if (state.groups.includes(name)) {
+      toast(`分组 ${name} 已存在`);
+      return;
+    }
+    state.groups.push(name);
+    closeDialog(groupDialog);
+    log("新建分组", `${name} 组`);
+    void API.send("group-add", [], { name });
+    render();
+  });
+  $("#groupField").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      $("#groupSave").click();
+    }
+  });
+
+  /* ---------------- 白板 ---------------- */
+  let boardCanvas = null;
+
+  function paintBoard(preview) {
+    const canvas = boardCanvas;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const strokes = preview ? [...state.strokes, preview] : state.strokes;
+    strokes.forEach((stroke) => {
+      if (!stroke.points || stroke.points.length === 0) return;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.beginPath();
+      stroke.points.forEach((pt, index) => {
+        if (index === 0) ctx.moveTo(pt[0], pt[1]);
+        else ctx.lineTo(pt[0], pt[1]);
+      });
+      ctx.stroke();
+    });
+  }
+
+  function refreshBoardCount() {
+    const counter = $("#boardStrokeCount");
+    if (counter) counter.textContent = `${state.strokes.length} 笔`;
+  }
+
+  let confirmAction = null;
+
+  function askConfirm(options, onOk) {
+    $("#confirmTitle").textContent = options.title;
+    $("#confirmText").textContent = options.text;
+    $("#confirmOk").textContent = options.ok;
+    confirmAction = onOk;
+    openDialog(confirmDialog);
+  }
+
+  $("#confirmOk").addEventListener("click", () => {
+    const action = confirmAction;
+    confirmAction = null;
+    closeDialog(confirmDialog);
+    if (action) action();
+  });
+
+  confirmDialog.addEventListener("close", () => { confirmAction = null; });
+
+  function clearBoard(skipConfirm) {
+    if (state.strokes.length === 0) {
+      toast("画板已经是空的");
+      return;
+    }
+
+    if (!skipConfirm) {
+      askConfirm(
+        {
+          title: "清空画板",
+          text: `清空 ${state.strokes.length} 笔笔迹？`,
+          ok: "确认清空"
+        },
+        () => clearBoard(true)
+      );
+      return;
+    }
+
+    state.strokes = [];
+    paintBoard();
+    refreshBoardCount();
+    log("白板清空", "");
+    if (state.board) void API.send("board-clear", [], {});
+  }
+
+  function undoBoard() {
+    if (state.strokes.length === 0) {
+      toast("没有可撤销的笔迹");
+      return;
+    }
+    state.strokes.pop();
+    paintBoard();
+    refreshBoardCount();
+    log("白板撤销", `剩 ${state.strokes.length} 笔`);
+    if (state.board) void API.send("board-sync", [], { strokes: state.strokes });
+  }
+
+  function renderBoardSection() {
+    const wrap = document.createElement("div");
+    wrap.className = "board-wrap";
+
+    const colors = [
+      "#0f172a", // 黑
+      "#64748b", // 灰
+      "#dc2626", // 红
+      "#ea580c", // 橙
+      "#ca8a04", // 黄
+      "#16a34a", // 绿
+      "#2563eb", // 蓝
+      "#7c3aed", // 紫
+      "#db2777"  // 粉
+    ];
+    const widths = [2, 4, 8];
+
+    wrap.innerHTML = `
+      <div class="board-toolbar">
+        ${colors
+          .map(
+            (color) =>
+              `<button type="button" class="swatch${state.brush.color === color && !state.brush.eraser ? " is-active" : ""}" data-color="${color}" style="background:${color}" aria-label="画笔颜色"></button>`
+          )
+          .join("")}
+        <span class="sep"></span>
+        ${widths
+          .map(
+            (width) =>
+              `<button type="button" class="abtn${state.brush.width === width && !state.brush.eraser ? " is-on" : ""}" data-width="${width}">${width}px</button>`
+          )
+          .join("")}
+        <button type="button" class="abtn${state.brush.eraser ? " is-on" : ""}" id="boardEraser">橡皮</button>
+        <button type="button" class="abtn" id="boardClear">清空</button>
+        <span class="ab-right" id="boardShareState"></span>
+      </div>
+      <div class="board-canvas-box">
+        <canvas id="boardCanvas"></canvas>
+        <span class="board-status" id="boardStrokeCount"></span>
+      </div>
+    `;
+    stageBody.appendChild(wrap);
+
+    boardCanvas = wrap.querySelector("#boardCanvas");
+    const box = boardCanvas.parentElement;
+
+    const syncStatus = () => {
+      $("#boardShareState").textContent = state.board ? "共享中" : "未共享";
+      $("#boardStrokeCount").textContent = `${state.strokes.length} 笔`;
+    };
+
+    const resizeBoard = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const width = box.clientWidth;
+      const height = box.clientHeight;
+      if (!width || !height) return;
+      boardCanvas.width = Math.round(width * dpr);
+      boardCanvas.height = Math.round(height * dpr);
+      paintBoard();
+    };
+
+    if (typeof ResizeObserver === "function") {
+      new ResizeObserver(resizeBoard).observe(box);
+    } else {
+      window.addEventListener("resize", resizeBoard);
+    }
+    resizeBoard();
+    syncStatus();
+
+    // 画笔
+    let drawing = null;
+    const pointOf = (event) => {
+      const rect = boardCanvas.getBoundingClientRect();
+      return [Math.round(event.clientX - rect.left), Math.round(event.clientY - rect.top)];
+    };
+
+    boardCanvas.addEventListener("pointerdown", (event) => {
+      boardCanvas.setPointerCapture(event.pointerId);
+      drawing = {
+        color: state.brush.eraser ? "#ffffff" : state.brush.color,
+        width: state.brush.eraser ? 18 : state.brush.width,
+        points: [pointOf(event)]
+      };
+      paintBoard(drawing);
+    });
+
+    boardCanvas.addEventListener("pointermove", (event) => {
+      if (!drawing) return;
+      drawing.points.push(pointOf(event));
+      paintBoard(drawing);
+    });
+
+    const finish = () => {
+      if (!drawing) return;
+      const stroke = drawing;
+      drawing = null;
+      if (stroke.points.length < 2) return;
+
+      state.strokes.push(stroke);
+      paintBoard();
+      $("#boardStrokeCount").textContent = `${state.strokes.length} 笔`;
+      if (state.board) void API.send("board-draw", [], { stroke });
+    };
+    boardCanvas.addEventListener("pointerup", finish);
+    boardCanvas.addEventListener("pointercancel", finish);
+    boardCanvas.addEventListener("pointerleave", finish);
+
+    // 工具栏
+    wrap.querySelectorAll(".swatch").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.brush.color = button.dataset.color;
+        state.brush.eraser = false;
+        render();
+      });
+    });
+
+    wrap.querySelectorAll("[data-width]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.brush.width = Number(button.dataset.width);
+        state.brush.eraser = false;
+        render();
+      });
+    });
+
+    $("#boardEraser").addEventListener("click", () => {
+      state.brush.eraser = !state.brush.eraser;
+      render();
+    });
+
+    $("#boardClear").addEventListener("click", () => clearBoard());
   }
 
   /* ---------------- 选择 ---------------- */
@@ -480,6 +1122,9 @@
   stageBody.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
     if (event.target.closest("[data-id]")) return;
+    // 白板工具栏 / 画布 / 分组组头不参与框选：
+    // 否则松手那一下会触发“空白单击→重绘”，把被点的元素换掉，click 收不到
+    if (event.target.closest(".board-toolbar, .board-canvas-box, .group-head, .groups-wrap")) return;
     dragState = {
       x0: event.clientX,
       y0: event.clientY,
@@ -527,6 +1172,7 @@
 
   /* ---------------- 右键菜单 ---------------- */
   const ctxMenu = $("#ctxMenu");
+  let ctxMachine = null;   // 右键那台机器：投屏此机时作为投屏源
 
   function closeCtx() {
     ctxMenu.hidden = true;
@@ -561,9 +1207,38 @@
     ctxMenu.style.top = `${Math.max(6, Math.min(y, window.innerHeight - box.height - 6))}px`;
   }
 
+  // 输入框一律不允许拖拽文字（拖拽会打断选区）
+  document.addEventListener("pointerdown", (event) => {
+    const field = event.target.closest("input, textarea");
+    if (field) field.draggable = false;
+  }, true);
+
+  // 点到编辑框以外就退出编辑（不提交），否则界面会被“编辑中”锁住
+  document.addEventListener("mousedown", (event) => {
+    if (!inlineEdit) return;
+    if (event.target.closest("#inlineInput, #inlineGroup, .pencil")) return;
+    inlineEdit = null;
+    render();
+  }, true);
+
   document.addEventListener("contextmenu", (event) => {
     if (event.target.closest("input, textarea, select")) return;
     event.preventDefault();
+
+    // 白板自己的菜单
+    if (event.target.closest(".board-wrap")) {
+      openCtx(
+        event.clientX,
+        event.clientY,
+        [
+          { label: "撤销上一笔", act: "board-undo" },
+          { label: "清空画板", act: "board-clear" }
+        ],
+        `白板 · ${state.strokes.length} 笔`
+      );
+      return;
+    }
+
     const hit = event.target.closest("[data-id]");
 
     if (!hit || !stageBody.contains(hit)) {
@@ -585,29 +1260,51 @@
     }
 
     const machine = byId(hit.dataset.id);
+    if (!machine) return;
+    ctxMachine = machine.id;
     if (!state.selected.has(machine.id)) {
       state.selected.clear();
       state.selected.add(machine.id);
       anchorId = machine.id;
       render();
     }
-
     const picked = selectedMachines().length;
     openCtx(
       event.clientX,
       event.clientY,
       [
-        { label: "投屏此机", icon: "i-screen", act: "cast" },
-        { label: "远程控制", icon: "i-control", act: "remote" },
-        { label: "锁定屏幕", icon: "i-lock", act: "lock" },
+        ...(picked === 1 ? [{ label: "共享此机屏幕", icon: "i-screen", act: "cast" }] : []),
+        { label: "文件分发", icon: "i-folder", act: "task-file" },
+        { label: "文件收集", icon: "i-inbox", act: "task-collect" },
+        ...(picked === 1
+          ? [
+              { label: "远程控制", icon: "i-control", act: "remote" },
+              { label: "远程指令", icon: "i-terminal", act: "terminal" }
+            ]
+          : []),
+        (function () {
+          const isLocked = machine.state === "locked";
+          return {
+            label: isLocked ? "解除锁定" : "锁定屏幕",
+            icon: "i-lock",
+            act: isLocked ? "unlock" : "lock"
+          };
+        })(),
+        "-",
+        { label: "打开网址", act: "task-url" },
+        { label: "启动程序", act: "task-app" },
         "-",
         { label: "重启", act: "restart" },
         { label: "关机", act: "off" },
         { label: "开机", act: "on" },
-        "-",
-        { label: "仅选此机", act: "only" }
+        ...(picked === 1
+          ? [
+              { label: "重命名…", act: "rename" },
+              { label: "仅选此机", act: "only" }
+            ]
+          : [])
       ],
-      `${machine.id} · ${machine.user || "未登录"}${picked > 1 ? ` · 已选 ${picked} 台` : ""}`
+      `${machine.id}${picked > 1 ? ` · 已选 ${picked} 台` : ""}`
     );
   });
 
@@ -623,6 +1320,7 @@
       cast: ["投屏", "投屏已开始"],
       remote: ["远程控制", "远程控制已进入"],
       lock: ["锁定屏幕", "锁定指令已下发"],
+      unlock: ["解除锁定", "已解除锁定"],
       restart: ["重启", "重启指令已下发"],
       off: ["关机", "关机指令已下发"],
       on: ["开机", "开机指令已下发"]
@@ -651,11 +1349,43 @@
       return;
     }
 
-    if (act === "cast" && !state.casting) toggleCast(true);
+    if (act === "cast") {
+      toggleCast(true, ctxMachine || "teacher");
+      return;
+    }
+    if (act === "rename") {
+      openRename(ctxMachine);
+      return;
+    }
+    if (act === "board-undo") {
+      undoBoard();
+      return;
+    }
+    if (act === "board-clear") {
+      clearBoard();
+      return;
+    }
+    if (act === "terminal") {
+      openTerminal(ctxMachine);
+      return;
+    }
+    if (act === "task-file" || act === "task-collect") {
+      openTask(act === "task-file" ? "file" : "collect", [...state.selected]);
+      return;
+    }
+    if (act === "task-url" || act === "task-app") {
+      openTask(act === "task-url" ? "url" : "app");
+      return;
+    }
+
+    if (act === "remote") {
+      openRemote(ctxMachine);
+      return;
+    }
 
     const pickedIds = [...state.selected];
     if (act === "lock") void API.send("lock", pickedIds, {});
-    else if (act === "remote") void API.send("remote", pickedIds, {});
+    else if (act === "unlock") void API.send("unlock", pickedIds, {});
     else if (act === "restart" || act === "off" || act === "on") {
       void API.send("power", pickedIds, { mode: act });
     }
@@ -674,21 +1404,36 @@
   stageBody.addEventListener("scroll", closeCtx);
 
   /* ---------------- 广播 / 电源 ---------------- */
-  function toggleCast(force) {
-    state.casting = typeof force === "boolean" ? force : !state.casting;
-    if (state.casting) {
-      const target = targetScope();
-      log("投屏开始", `→ ${target.label}`);
-      toast(`投屏已开始 · ${target.label}`);
-    } else {
-      log("投屏停止", "");
-      toast("投屏已停止");
+  // 点按钮投教师机；右键某台学生机则把那台学生机作为投屏源
+  function castSourceLabel() {
+    return state.source === "teacher" ? "教师机" : state.source;
+  }
+
+  function toggleCast(force, source) {
+    const next = typeof force === "boolean" ? force : !state.casting;
+    if (next && source) state.source = source;
+    if (next) {
+      // 屏幕共享与媒体 / 白板互斥
+      state.media = false;
+      state.board = false;
+      paintShareButtons();
     }
+    state.casting = next;
+
+    const target = targetScope();
+    if (state.casting) {
+      log("屏幕共享开始", `${castSourceLabel()} 全屏 · ${target.label}`);
+      toast(`正在投送${castSourceLabel()} · ${target.label}`);
+    } else {
+      log("屏幕共享停止", "");
+      toast("屏幕共享已停止");
+    }
+
     renderChrome();
     void API.send("cast", targetIds(), {
       on: state.casting,
       source: state.source,
-      scope: state.scope
+      scope: "all"
     });
   }
 
@@ -707,10 +1452,9 @@
   /* ---------------- 任务下发 ---------------- */
   const TASK = {
     file: {
-      title: "下发文件",
+      title: "文件分发",
       confirm: "开始下发",
       body: `
-        <p class="note">选择的文件将下发到目标学生的桌面目录。</p>
         <label class="drop">
           <span id="dropLabel">点击选择文件，或拖到此处</span>
           <input type="file" hidden>
@@ -722,16 +1466,45 @@
       title: "打开网址",
       confirm: "打开网址",
       body: `
-        <p class="note">目标机器将用默认浏览器打开该地址，白名单外的站点会被拦截。</p>
         <input class="input" id="urlField" type="url" value="https://www.python.org/" aria-label="网址">
       `,
       detail: (t) => `${$("#urlField")?.value || "网址"} → ${t.label}`
+    },
+    command: {
+      title: "远程指令",
+      confirm: "",
+      body: `
+        <div class="cmd-actions">
+          <button type="button" class="btn" data-cmd="shutdown">关机</button>
+          <button type="button" class="btn" data-cmd="reboot">重启</button>
+          <button type="button" class="btn" data-cmd="url">打开网址</button>
+        </div>
+        <div class="field-block">
+          <span class="field-k">网址</span>
+          <input class="input" id="cmdField" type="text" value="https://www.python.org/" draggable="false" aria-label="网址">
+        </div>
+        <div class="cmd-confirm" id="cmdConfirm" hidden>
+          <p class="note" id="cmdConfirmText"></p>
+          <div class="cmd-confirm-actions">
+            <button type="button" class="btn" id="cmdConfirmCancel">取消</button>
+            <button type="button" class="btn btn-primary" id="cmdConfirmOk">确认</button>
+          </div>
+        </div>
+      `,
+      detail: () => ""
+    },
+    collect: {
+      title: "文件收集",
+      confirm: "开始收集",
+      body: `
+        <input class="input" id="collectField" type="text" draggable="false" value="D:\\课堂作业" aria-label="收集目录">
+      `,
+      detail: (t) => `${$("#collectField")?.value || "作业目录"} → ${t.label}`
     },
     app: {
       title: "启动程序",
       confirm: "启动",
       body: `
-        <p class="note">在目标机器上启动指定程序，已运行的同名进程会先被关闭。</p>
         <select class="input" id="appField" aria-label="程序">
           <option>Python 3.12</option>
           <option>Visual Studio Code</option>
@@ -744,13 +1517,18 @@
   };
 
   let activeTask = null;
+  let taskTargets = null;
 
-  function openTask(type) {
+  function openTask(type, targets) {
     const cfg = TASK[type];
-    if (!cfg) return;
+    if (!cfg) {
+      toast(`这个操作还没接上：${type}`);
+      return;
+    }
     activeTask = type;
+    taskTargets = Array.isArray(targets) && targets.length ? [...targets] : null;
     $("#taskTitle").textContent = cfg.title;
-    $("#taskHint").textContent = `目标：${targetScope().label}`;
+    $("#taskHint").textContent = `目标：${taskTargets ? `${taskTargets.length} 台` : targetScope().label}`;
     $("#taskBody").innerHTML = cfg.body;
     $("#taskConfirm").textContent = cfg.confirm;
 
@@ -773,27 +1551,197 @@
         if (file) label.textContent = file.name;
       });
     }
+    $("#taskConfirm").style.display = type === "command" ? "none" : "";
+    if (type === "command") mountCommandPanel();
+
     openDialog(taskDialog);
   }
 
-  /* ---------------- 事件 ---------------- */
-  stageBody.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-id]");
-    if (!target) return;
-    applyClickSelect(target.dataset.id, event);
-  });
+  /* 远程指令：关机 / 重启 / 打开网址，全体下发 + 二次确认 */
+  let cmdPending = null;
 
-  stageBody.addEventListener("dblclick", (event) => {
-    const target = event.target.closest("[data-id]");
-    if (!target) return;
-    const m = byId(target.dataset.id);
-    if (m.state === "offline") toast(`${m.id} 当前离线，无法接管画面`);
-    else if (m.state === "locked") toast(`${m.id} 处于锁定状态，请先解锁`);
-    else {
-      log("接管画面", m.id);
-      toast(`正在接管 ${m.id} · ${m.user}`);
+  function onlineCount() {
+    return MACHINES.filter((m) => m.state !== "offline").length;
+  }
+
+  function broadcastPower(mode) {
+    const total = onlineCount();
+    log(POWER_LABEL[mode], `→ 全部 ${total} 台`);
+    toast(`${POWER_LABEL[mode]}指令已下发 · 全部 ${total} 台`);
+    void API.send("power", [], { mode });
+  }
+
+  function mountCommandPanel() {
+    cmdPending = null;
+    $("#cmdConfirm").hidden = true;
+
+    document.querySelectorAll(".cmd-actions [data-cmd]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const kind = button.dataset.cmd;
+        const total = onlineCount();
+        let text = "";
+
+        if (kind === "shutdown") text = `对全部 ${total} 台在线机器执行「关机」？`;
+        else if (kind === "reboot") text = `对全部 ${total} 台在线机器执行「重启」？`;
+        else {
+          const url = $("#cmdField").value.trim();
+          if (!url) {
+            toast("先填写要打开的网址");
+            $("#cmdField").focus();
+            return;
+          }
+          text = `在全部 ${total} 台在线机器上打开「${url}」？`;
+        }
+
+        cmdPending = { kind, total };
+        $("#cmdConfirmText").textContent = text;
+        $("#cmdConfirmOk").textContent =
+          kind === "shutdown" ? "确认关机" : kind === "reboot" ? "确认重启" : "确认打开";
+        $("#cmdConfirm").hidden = false;
+      });
+    });
+
+    $("#cmdConfirmCancel").addEventListener("click", () => {
+      cmdPending = null;
+      $("#cmdConfirm").hidden = true;
+    });
+
+    $("#cmdConfirmOk").addEventListener("click", () => {
+      if (!cmdPending) return;
+      const { kind, total } = cmdPending;
+      closeDialog(taskDialog);
+
+      if (kind === "shutdown") broadcastPower("off");
+      else if (kind === "reboot") broadcastPower("restart");
+      else {
+        const url = $("#cmdField").value.trim();
+        log("打开网址", `${url} → 全部 ${total} 台`);
+        toast(`网址已下发 · 全部 ${total} 台`);
+        void API.send("task", [], { title: "打开网址", detail: `${url} → 全部 ${total} 台` });
+      }
+    });
+  }
+
+  /* 右键单机 → 伪终端 */
+  let termMachine = null;
+
+  function openTerminal(id) {
+    const machine = byId(id);
+    if (!machine) return;
+    termMachine = machine;
+    $("#termHost").textContent = machine.id;
+    $("#termOut").textContent = `已连接 ${machine.id}\n`;
+    $("#termField").value = "";
+    openDialog(termDialog);
+    window.setTimeout(() => $("#termField").focus(), 60);
+  }
+
+  function termReply(cmd) {
+    const lower = cmd.toLowerCase();
+    const who = "student";
+
+    if (lower === "ipconfig") {
+      return [
+        "Windows IP 配置",
+        "",
+        "以太网适配器 以太网:",
+        "   IPv4 地址 . . . . . . . . . . . . : " + termMachine.ip,
+        "   子网掩码  . . . . . . . . . . . . : 255.255.255.0",
+        "   默认网关. . . . . . . . . . . . . : 192.168.10.1"
+      ].join("\n");
+    }
+
+    if (lower.startsWith("ping")) {
+      return [
+        "正在 Ping 192.168.10.1 具有 32 字节的数据:",
+        "来自 192.168.10.1 的回复: 字节=32 时间<1ms TTL=64",
+        "来自 192.168.10.1 的回复: 字节=32 时间<1ms TTL=64",
+        "192.168.10.1 的 Ping 统计信息: 数据包: 已发送 = 2，已接收 = 2，丢失 = 0 (0% 丢失)"
+      ].join("\n");
+    }
+
+    if (lower === "dir") {
+      return [
+        " 驱动器 C 中的卷没有标签。",
+        " C:\\Users\\" + who + " 的目录",
+        "",
+        "2026/11/14  09:12    <DIR>          Desktop",
+        "2026/11/14  09:12    <DIR>          Documents",
+        "2026/11/14  09:12    <DIR>          Downloads",
+        "               0 个文件              0 字节"
+      ].join("\n");
+    }
+
+    if (lower === "whoami") {
+      return "classroom\\" + who;
+    }
+
+    return "命令已下发";
+  }
+
+  function termRun() {
+    const field = $("#termField");
+    const cmd = field.value.trim();
+    if (!cmd || !termMachine) return;
+    field.value = "";
+
+    const out = $("#termOut");
+    out.textContent += "C:\\> " + cmd + "\n" + termReply(cmd) + "\n\n";
+    out.scrollTop = out.scrollHeight;
+
+    log("远程指令", termMachine.id + ": " + cmd);
+    void API.send("task", [termMachine.id], {
+      title: "远程指令",
+      detail: cmd + " → " + termMachine.id
+    });
+  }
+
+  $("#termSend").addEventListener("click", termRun);
+  $("#termField").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      termRun();
     }
   });
+
+  /* ---------------- 事件 ---------------- */
+  stageBody.addEventListener("click", (event) => {
+    const group = event.target.closest("[data-group]");
+    if (group) {
+      const row = group.dataset.group;
+      if (state.collapsed.has(row)) state.collapsed.delete(row);
+      else state.collapsed.add(row);
+      render();
+      return;
+    }
+
+    const target = event.target.closest("[data-id]");
+    if (!target) return;
+
+    const id = target.dataset.id;
+    const now = performance.now();
+    if (clickMark.id === id && now - clickMark.at < 400) {
+      clickMark = { id: null, at: 0 };
+      openRemote(id);
+      return;
+    }
+    clickMark = { id, at: now };
+
+    applyClickSelect(id, event);
+  });
+
+  let clickMark = { id: null, at: 0 };
+  let inlineEdit = null;
+
+  function openRemote(id) {
+    const machine = byId(id);
+    if (!machine) return;
+    if (machine.state === "offline") {
+      toast(`${machine.id} 离线`);
+      return;
+    }
+    openRemoteWindow(machine.id);
+  }
 
   document.querySelectorAll(".rail-btn[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -819,52 +1767,6 @@
   bindSeg("#rowSeg", "row");
   bindSeg("#stateSeg", "state");
 
-  /* 投屏设置：同样草稿式，改动后出现保存条 */
-  let castDraft = { source: state.source, scope: state.scope };
-
-  function paintCastSegs() {
-    [...$("#sourceSeg").children].forEach((b) =>
-      b.classList.toggle("is-active", b.dataset.source === castDraft.source)
-    );
-    [...$("#scopeSeg").children].forEach((b) =>
-      b.classList.toggle("is-active", b.dataset.scope === castDraft.scope)
-    );
-    const dirty = castDraft.source !== state.source || castDraft.scope !== state.scope;
-    $("#castActions").hidden = !dirty;
-    $("#castHint").textContent = state.casting ? "进行中" : "未开始";
-  }
-
-  $("#sourceSeg").addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    castDraft.source = button.dataset.source;
-    paintCastSegs();
-  });
-
-  $("#scopeSeg").addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    castDraft.scope = button.dataset.scope;
-    paintCastSegs();
-  });
-
-  $("#castSave").addEventListener("click", () => {
-    state.source = castDraft.source;
-    state.scope = castDraft.scope;
-    const sourceText = state.source === "teacher" ? "教师机" : "学生机";
-    const scopeText = state.scope === "all" ? "全部" : "选中";
-    log("投屏设置保存", `${sourceText} / ${scopeText}`);
-    toast(`投屏设置已保存 · ${sourceText} / ${scopeText}`);
-    paintCastSegs();
-    renderChrome();
-  });
-
-  $("#castCancel").addEventListener("click", () => {
-    castDraft = { source: state.source, scope: state.scope };
-    paintCastSegs();
-    log("投屏设置未保存", "已放弃本次修改");
-  });
-
   $("#searchInput").addEventListener("input", (event) => {
     state.query = event.target.value.trim().toLowerCase();
     render();
@@ -888,37 +1790,155 @@
     render();
   });
 
-  $("#castToggle").addEventListener("click", () => toggleCast());
+  $("#castToggle").addEventListener("click", () => toggleCast(undefined, "teacher"));
 
-  $("#blankBtn").addEventListener("click", () => {
-    state.blank = !state.blank;
+  /* 媒体共享 / 白板共享：与屏幕共享互斥，点一下即生效 */
+  function paintShareButtons() {
+    $("#mediaBtn").classList.toggle("is-on", state.media);
+    $("#boardBtn").classList.toggle("is-on", state.board);
+  }
+
+  function toggleAuxShare(kind) {
+    const pressed = !state[kind];
+    if (pressed) {
+      if (state.casting) toggleCast(false);
+      if (kind === "media") state.board = false;
+      else state.media = false;
+    }
+    state[kind] = pressed;
+
+    const name = kind === "media" ? "媒体共享" : "白板共享";
     const target = targetScope();
-    log(state.blank ? "黑屏肃静 开启" : "黑屏肃静 关闭", `→ ${target.label}`);
-    toast(state.blank ? "黑屏肃静已开启" : "黑屏肃静已关闭");
-    renderChrome();
-    void API.send("blank", targetIds(), { on: state.blank });
+    log(pressed ? `${name} 开启` : `${name} 关闭`, `→ ${target.label}`);
+    toast(pressed ? `${name}已开始 · ${target.label}` : `${name}已停止`);
+    paintShareButtons();
+    if (state.view === "board") render();
+
+    if (kind === "board" && pressed) {
+      void API.send("board-sync", [], { strokes: state.strokes });
+    }
+    void API.send(kind, targetIds(), { on: pressed });
+  }
+
+  /* 远程控制：先弹机器列表，选一台再接管 */
+  function openRemotePicker() {
+    const list = $("#remoteList");
+    list.innerHTML = "";
+    MACHINES.forEach((machine) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "pick-item";
+      item.dataset.id = machine.id;
+      item.disabled = machine.state === "offline";
+      item.innerHTML = `
+        <span class="pick-id">${machine.id}</span>
+        <span class="pick-user">${machine.ip}</span>
+        <span class="state-pill" data-state="${machine.state}">${STATE_LABEL[machine.state]}</span>
+      `;
+      list.appendChild(item);
+    });
+    openDialog(remoteDialog);
+  }
+
+  $("#remoteBtn").addEventListener("click", openRemotePicker);
+
+  $("#remoteList").addEventListener("click", (event) => {
+    const item = event.target.closest(".pick-item");
+    if (!item || item.disabled) return;
+    const machine = byId(item.dataset.id);
+    closeDialog(remoteDialog);
+    openRemote(machine.id);
   });
 
-  $("#lockBtn").addEventListener("click", () => {
-    const target = targetScope();
-    log("锁定屏幕", `→ ${target.label}`);
-    toast(`锁定指令已下发 · ${target.label}`);
-    void API.send("lock", targetIds(), {});
+  /* 媒体共享：先选文件，点「投放」才生效 */
+  let mediaFile = null;
+
+  function openMediaDialog() {
+    mediaFile = null;
+    $("#mediaInput").value = "";
+    $("#mediaLabel").textContent = "选择文件";
+    openDialog(mediaDialog);
+  }
+
+  function pickMedia(file) {
+    if (!file) return;
+    mediaFile = file;
+    $("#mediaLabel").textContent = file.name;
+  }
+
+  $("#mediaBtn").addEventListener("click", () => {
+    if (state.media) {
+      toggleAuxShare("media"); // 正在投放：点一下停止
+      return;
+    }
+    openMediaDialog();
   });
 
-  $("#remoteBtn").addEventListener("click", () => {
+  (() => {
+    const drop = $("#mediaDrop");
+    const input = $("#mediaInput");
+    input.addEventListener("change", () => pickMedia(input.files[0]));
+    ["dragenter", "dragover"].forEach((t) =>
+      drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("is-over"); })
+    );
+    ["dragleave", "drop"].forEach((t) =>
+      drop.addEventListener(t, () => drop.classList.remove("is-over"))
+    );
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      pickMedia(e.dataTransfer.files[0]);
+    });
+  })();
+
+  $("#mediaStart").addEventListener("click", () => {
+    if (!mediaFile) {
+      toast("先选择要投放的文件");
+      return;
+    }
+    const name = mediaFile.name;
+    closeDialog(mediaDialog);
+
+    // 与屏幕共享 / 白板共享互斥
+    if (state.casting) toggleCast(false);
+    state.board = false;
+    state.media = true;
+    paintShareButtons();
+
     const target = targetScope();
-    log("远程控制", `→ ${target.label}`);
-    toast(`远程控制已进入 · ${target.label}`);
-    void API.send("remote", targetIds(), {});
+    log("媒体共享 开始", `${name} → ${target.label}`);
+    toast(`正在投放 ${name} · ${target.label}`);
+    void API.send("media", [], { on: true, file: name });
+  });
+  $("#boardBtn").addEventListener("click", () => toggleAuxShare("board"));
+
+  $("#remoteCmdBtn").addEventListener("click", () => openTask("command"));
+  $("#collectBtn").addEventListener("click", () => openTask("collect"));
+
+  /* 一键让所有机器在各自屏幕上显示机号与 IP */
+  let labelOn = false;
+
+  function applyLabel(on) {
+    labelOn = on;
+    MACHINES.forEach((m) => { m.label = on; });
+    const button = $("#labelBtn");
+    button.classList.toggle("is-on", on);
+    button.querySelector("span")?.remove?.();
+    log(on ? "显示机号" : "隐藏机号", `全部 ${onlineCount()} 台`);
+    toast(on ? "已下发显示机号" : "已下发隐藏机号");
+    render();
+    void API.send("label", [], { on });
+  }
+
+  $("#labelBtn").addEventListener("click", () => applyLabel(!labelOn));
+
+  $("#quizBtn").addEventListener("click", () => {
+    const target = targetScope();
+    log("在线答题", `→ ${target.label}`);
+    toast(`答题卡已下发 · ${target.label}`);
+    void API.send("quiz", targetIds(), {});
   });
 
-  $("#demoBtn").addEventListener("click", () => {
-    const target = targetScope();
-    log("学生演示", `→ ${target.label}`);
-    toast(`学生演示已开启 · ${target.label}`);
-    void API.send("demo", targetIds(), {});
-  });
+  $("#policyBarBtn").addEventListener("click", openPolicy);
 
   /* 控制台设置：草稿式 */
   let settingsSaved = false;
@@ -955,19 +1975,42 @@
     button.addEventListener("click", () => openTask(button.dataset.task));
   });
 
-  const switches = [
-    ["#swUsb", "锁定外设"],
-    ["#swInstall", "禁止安装"],
-    ["#swInternet", "上网限制"]
+  const policySwitches = [
+    ["#swUsb", "usb", "禁止 USB 传输"],
+    ["#swOffline", "blockNet", "禁止联网"],
+    ["#swInternet", "block", "上网限制"]
   ];
 
-  switches.forEach(([sel, name]) => {
-    const input = $(sel);
-    input.addEventListener("change", () => {
-      const target = targetScope();
-      log(input.checked ? `${name} 开启` : `${name} 关闭`, `→ ${target.label}`);
-      toast(`${name}已${input.checked ? "开启" : "关闭"}`);
+  function pushPolicy() {
+    void API.send("policy", [], { ...state.policy, sites: state.sites, presets: state.presets });
+  }
+
+  policySwitches.forEach(([sel, key, name]) => {
+    $(sel).addEventListener("change", (event) => {
+      state.policy[key] = event.target.checked;
+      log(`${name} ${event.target.checked ? "开启" : "关闭"}`, `→ ${targetScope().label}`);
+      toast(`${name}已${event.target.checked ? "开启" : "关闭"}`);
+      pushPolicy();
     });
+  });
+
+  /* 一键锁屏：同黑屏原理，全屏黑掉 + 屏蔽键鼠，可自定义显示内容 */
+  $("#lockToggleBtn").addEventListener("click", () => {
+    const message = $("#lockMessage").value.trim() || "上课中，请勿操作";
+    state.lockMessage = message;
+    const next = !state.locked;
+    state.locked = next;
+
+    const target = targetScope();
+    if (next) {
+      log("一键锁屏", `${message} · ${target.label}`);
+      toast(`已锁屏 · ${message}`);
+    } else {
+      log("解除锁屏", `→ ${target.label}`);
+      toast("已解除锁屏");
+    }
+    renderChrome();
+    void API.send(next ? "lock" : "unlock", targetIds(), { message });
   });
 
   $("#clearSelBtn").addEventListener("click", () => {
@@ -987,21 +2030,30 @@
     button.addEventListener("click", () => closeDialog(button.closest("dialog")));
   });
 
+  // 弹窗只能通过“取消/关闭”按钮关闭：点遮罩、按 Esc 都不生效，避免误关丢掉草稿
+  // 点弹窗的空白区域不要给它焦点（否则会出焦点框）
   document.querySelectorAll("dialog").forEach((dialog) => {
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) closeDialog(dialog);
+    dialog.addEventListener("mousedown", (event) => {
+      if (event.target === dialog) event.preventDefault();
     });
+  });
+
+  document.querySelectorAll("dialog").forEach((dialog) => {
+    dialog.addEventListener("cancel", (event) => event.preventDefault());
   });
 
   $("#taskConfirm").addEventListener("click", () => {
     const cfg = TASK[activeTask];
     if (!cfg) return;
-    const target = targetScope();
+
+    const target = taskTargets
+      ? { machines: taskTargets, label: `${taskTargets.length} 台` }
+      : targetScope();
     const detail = cfg.detail(target);
     log(cfg.title, detail);
     toast(`${cfg.title}指令已下发 · ${target.label}`);
     closeDialog(taskDialog);
-    void API.send("task", targetIds(), { title: cfg.title, detail });
+    void API.send("task", taskTargets || targetIds(), { title: cfg.title, detail });
   });
 
   /* 白名单：弹窗内只改草稿，点保存才写入状态，取消即丢弃 */
@@ -1032,15 +2084,235 @@
     $("#policyDirty").hidden = !dirty;
   }
 
+  /* 策略分类：访问限制 / 异常程序 */
+  let policyTab = "access";
+  let policyDraftProcs = [];
+  let policyDraftProcMode = "block";
+
+  const procTags = $("#procTags");
+  const procField = $("#procField");
+
+  function paintPolicyTab() {
+    [...$("#policyTabSeg").children].forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.tab === policyTab)
+    );
+    $("#policyAccessPane").hidden = policyTab !== "access";
+    $("#policyProcPane").hidden = policyTab !== "proc";
+  }
+
+  function renderProcTags(list) {
+    procTags.querySelectorAll(".tag").forEach((tag) => tag.remove());
+    list.forEach((name) => {
+      const tag = document.createElement("button");
+      tag.type = "button";
+      tag.className = "tag";
+      tag.dataset.proc = name;
+      tag.title = "点击移除";
+      tag.textContent = name;
+      procTags.insertBefore(tag, procField);
+    });
+  }
+
+  function draftProcs() {
+    return [...procTags.querySelectorAll(".tag")].map((tag) => tag.dataset.proc);
+  }
+
+  function paintProcMode() {
+    [...$("#procModeSeg").children].forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.proc === policyDraftProcMode)
+    );
+  }
+
+  $("#policyTabSeg").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    policyTab = button.dataset.tab;
+    paintPolicyTab();
+  });
+
+  $("#procModeSeg").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button || button.dataset.proc === policyDraftProcMode) return;
+    policyDraftProcMode = button.dataset.proc;
+    paintProcMode();
+    setPolicyDirty(true);
+  });
+
+  procField.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const value = procField.value.trim();
+    if (!value) return;
+    if (draftProcs().includes(value)) {
+      procField.value = "";
+      return;
+    }
+    const tag = document.createElement("button");
+    tag.type = "button";
+    tag.className = "tag";
+    tag.dataset.proc = value;
+    tag.title = "点击移除";
+    tag.textContent = value;
+    procTags.insertBefore(tag, procField);
+    procField.value = "";
+    setPolicyDirty(true);
+  });
+
+  procTags.addEventListener("click", (event) => {
+    const tag = event.target.closest(".tag");
+    if (!tag) return;
+    tag.remove();
+    setPolicyDirty(true);
+  });
+
+  let policyDraftMode = state.policy.mode;
+  let policyDraftPreset = state.policy.preset;
+  let policyDraftPresets = [];
+
+  function modePresets() {
+    return policyDraftPresets.filter((p) => p.mode === policyDraftMode);
+  }
+
+  function paintPolicyMode() {
+    [...$("#policyModeSeg").children].forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.mode === policyDraftMode)
+    );
+    $("#sitesLabel").textContent =
+      policyDraftMode === "whitelist" ? "允许访问的网站" : "禁止访问的网站";
+    // 完全禁止：除了“限制方式”这一组，其余控件全部置灰且不可操作
+    const blocked = policyDraftMode === "blockall";
+    const listBlock = $("#policyListBlock");
+    listBlock.classList.toggle("is-disabled", blocked);
+    listBlock.querySelectorAll("input, select, button").forEach((el) => {
+      el.disabled = blocked;
+    });
+    $("#policyLog").disabled = blocked;
+    $("#policyLogRow").classList.toggle("is-disabled", blocked);
+  }
+
+  function paintPresetSelect() {
+    const select = $("#presetSelect");
+    select.innerHTML = "";
+    const custom = document.createElement("option");
+    custom.value = "";
+    custom.textContent = "自定义";
+    select.appendChild(custom);
+
+    modePresets().forEach((preset) => {
+      const option = document.createElement("option");
+      option.value = preset.name;
+      option.textContent = `${preset.name} · ${preset.sites.length}`;
+      select.appendChild(option);
+    });
+    const matched = modePresets().some((p) => p.name === policyDraftPreset);
+    select.value = matched ? policyDraftPreset : "";
+    resetPresetDelete();
+  }
+
+  /* 删除预设：需要二次确认 */
+  let presetDeleteArmed = false;
+  let presetDeleteTimer = 0;
+
+  function resetPresetDelete() {
+    presetDeleteArmed = false;
+    window.clearTimeout(presetDeleteTimer);
+    const button = $("#presetDelete");
+    button.textContent = "删除";
+    button.classList.remove("is-alert");
+    button.disabled = !policyDraftPreset || policyDraftMode === "blockall";
+  }
+
+  function armPresetDelete() {
+    const button = $("#presetDelete");
+    presetDeleteArmed = true;
+    button.textContent = "确认删除？";
+    button.classList.add("is-alert");
+    window.clearTimeout(presetDeleteTimer);
+    presetDeleteTimer = window.setTimeout(resetPresetDelete, 3000);
+  }
+
   function openPolicy() {
     policySaved = false;
-    renderPolicyTags(state.whitelist);
-    $("#policyBlock").checked = state.policy.block;
+    policyDraftMode = state.policy.mode;
+    policyDraftPreset = state.policy.preset;
+    policyDraftPresets = state.presets.map((p) => ({ ...p, sites: [...p.sites] }));
+    renderPolicyTags(state.sites);
     $("#policyLog").checked = state.policy.log;
+    $("#presetName").value = "";
     tagField.value = "";
+    policyDraftProcs = [...(state.policy.procs?.list || [])];
+    policyDraftProcMode = state.policy.procs?.mode === "report" ? "report" : "block";
+    renderProcTags(policyDraftProcs);
+    paintProcMode();
+    policyTab = "access";
+    paintPolicyTab();
+    paintPolicyMode();
+    paintPresetSelect();
     setPolicyDirty(false);
     openDialog(policyDialog);
   }
+
+  $("#policyModeSeg").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button || button.dataset.mode === policyDraftMode) return;
+    policyDraftMode = button.dataset.mode;
+    policyDraftPreset = "";
+    paintPolicyMode();
+    paintPresetSelect();
+    setPolicyDirty(true);
+  });
+
+  $("#presetSelect").addEventListener("change", (event) => {
+    const name = event.target.value;
+    policyDraftPreset = name;
+    const preset = policyDraftPresets.find((p) => p.name === name && p.mode === policyDraftMode);
+    if (preset) renderPolicyTags(preset.sites);
+    resetPresetDelete();
+    setPolicyDirty(true);
+  });
+
+  $("#presetDelete").addEventListener("click", () => {
+    if (!policyDraftPreset) return;
+
+    if (!presetDeleteArmed) {
+      armPresetDelete();
+      toast("再点一次确认");
+      return;
+    }
+
+    const name = policyDraftPreset;
+    policyDraftPresets = policyDraftPresets.filter(
+      (p) => !(p.name === name && p.mode === policyDraftMode)
+    );
+    policyDraftPreset = "";
+    paintPresetSelect();
+    setPolicyDirty(true);
+    toast(`预设「${name}」已删除`);
+  });
+
+  $("#presetSave").addEventListener("click", () => {
+    const name = $("#presetName").value.trim();
+    if (!name) {
+      toast("先给预设起个名字");
+      $("#presetName").focus();
+      return;
+    }
+    if (policyDraftMode === "blockall") {
+      toast("完全禁止不需要预设");
+      return;
+    }
+
+    const sites = draftSites();
+    const existing = policyDraftPresets.find((p) => p.name === name && p.mode === policyDraftMode);
+    if (existing) existing.sites = sites;
+    else policyDraftPresets.push({ name, mode: policyDraftMode, sites });
+
+    policyDraftPreset = name;
+    $("#presetName").value = "";
+    paintPresetSelect();
+    setPolicyDirty(true);
+    toast(`预设「${name}」已保存`);
+  });
 
   policyDialog.addEventListener("close", () => {
     if (!policySaved && policyDirty) log("白名单未保存", "已放弃本次修改");
@@ -1071,24 +2343,31 @@
     setPolicyDirty(true);
   });
 
-  $("#policyBlock").addEventListener("change", () => setPolicyDirty(true));
   $("#policyLog").addEventListener("change", () => setPolicyDirty(true));
 
   $("#policySave").addEventListener("click", () => {
-    state.whitelist = draftSites();
-    state.policy = {
-      block: $("#policyBlock").checked,
-      log: $("#policyLog").checked
-    };
+    if (policyDraftMode === "blockall") {
+      state.sites = [];
+      state.policy.preset = "";
+    } else {
+      state.sites = draftSites();
+      state.policy.preset = policyDraftPreset;
+    }
+    state.policy.mode = policyDraftMode;
+    state.policy.log = $("#policyLog").checked;
+    state.policy.procs = { mode: policyDraftProcMode, list: draftProcs() };
+    state.presets = policyDraftPresets;
+
     policySaved = true;
-    log("白名单保存", `${state.whitelist.length} 个域名`);
-    toast(`白名单已保存 · ${state.whitelist.length} 个域名`);
+    const modeText = { whitelist: "白名单", blacklist: "黑名单", blockall: "完全禁止" }[state.policy.mode];
+    const detail =
+      state.policy.mode === "blockall"
+        ? "禁止访问任何网站"
+        : `${modeText} ${state.sites.length} 个${state.policy.preset ? ` · ${state.policy.preset}` : ""}`;
+    log("访问限制策略保存", detail);
+    toast(`已保存 · ${detail}`);
     closeDialog(policyDialog);
-    void API.send("policy", [], {
-      block: state.policy.block,
-      log: state.policy.log,
-      whitelist: state.whitelist
-    });
+    void API.send("policy", [], { ...state.policy, sites: state.sites, presets: state.presets });
   });
 
   $("#settingsSave").addEventListener("click", () => {

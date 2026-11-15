@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>远程控制</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="remote.css">
+</head>
+<body class="remote-body">
+  <header class="remote-bar">
+    <span class="remote-title">远程控制</span>
+    <b class="remote-pc" id="remotePc">PC-01</b>
+    <span class="remote-state" id="remoteState" data-mode="view">观看</span>
+    <span class="remote-spacer"></span>
+    <button type="button" class="abtn" id="remoteToggle">开始控制</button>
+    <button type="button" class="abtn" id="remoteClose">断开</button>
+  </header>
+
+  <main class="remote-stage">
+    <div class="remote-frame" id="remoteFrame">
+      <div class="remote-screen" id="remoteScreen">
+        <i class="sk sk-1"></i><i class="sk sk-2"></i><i class="sk sk-3"></i>
+        <i class="sk sk-4"></i><i class="sk sk-5"></i>
+        <span class="remote-lock" id="remoteLock">观看模式</span>
+      </div>
+    </div>
+  </main>
+  <script src="remote.js"></script>
+</body>
+</html>
