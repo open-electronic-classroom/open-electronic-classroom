@@ -31,6 +31,24 @@ dotnet run -c Release -- --server=http://127.0.0.1:8800
 此时不再做虚拟域名映射，直接把窗口指向 `http://127.0.0.1:8800/web-console/index.html`，
 页面里的 `/api/*` 请求与 SSE 都会走这个后端。
 
+## 窗口尺寸与 DPI
+
+页面按 **1280×800 CSS 像素**设计，窗口尺寸在句柄创建时按 DPI 换算一次到位：
+
+```csharp
+var scale = DeviceDpi / 96.0;                       // 150% 缩放 = 1.5
+ClientSize = new Size(design.Width * scale, design.Height * scale);
+MinimumSize = SizeFromClientSize(设计尺寸的下限);
+```
+
+不这么做的话，150% 缩放下会出现"窗口 1280 物理像素、页面只拿到 854 CSS 像素"，
+控制台会挤成小屏布局。屏幕装不下时改用 `ZoomFactor` 把 CSS 视口补到 1280。
+
+**窗口尺寸会被记住**：关闭时按 CSS 像素写入
+`%LOCALAPPDATA%\Open-electronic-classroom\window.json`（`{"width":1488,"height":815}`），
+下次按同样大小打开；跨 DPI 也正确，因为存的是 CSS 尺寸而不是物理像素。
+拖小到 1280×800 以下会被最小尺寸拦住——那正是页面还能正常显示的下限。
+
 ## 打包分发
 
 ```bash
