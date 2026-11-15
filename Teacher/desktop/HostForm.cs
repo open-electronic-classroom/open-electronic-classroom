@@ -24,6 +24,7 @@ internal sealed class HostForm : Form
     private readonly string? _server;
     private CoreWebView2Environment? _environment;
     private NotifyIcon? _tray;
+    private string? _pendingAlertMachine;
 
     public HostForm(bool selfTest = false, string? selfTestOut = null, string? server = null)
     {
@@ -67,6 +68,12 @@ internal sealed class HostForm : Form
             Icon = File.Exists(iconPath) ? new Icon(iconPath) : SystemIcons.Application
         };
         _tray.DoubleClick += (_, _) => RestoreFromTray();
+        _tray.BalloonTipClicked += (_, _) =>
+        {
+            RestoreFromTray();
+            if (_pendingAlertMachine is { } machine) FocusMachine(machine);
+            _pendingAlertMachine = null;
+        };
         _tray.MouseUp += (_, e) =>
         {
             if (e.Button == MouseButtons.Right) ShowTrayMenu();
@@ -93,6 +100,54 @@ internal sealed class HostForm : Form
         menu.Location = new Point(x, y);
         menu.Show();
         menu.Activate();
+    }
+
+    /// <summary>窗口在托盘/最小化时，用 Windows 通知提醒（点通知回到出问题的机器）。</summary>
+    private void NotifyAlert(string machineId, string text)
+    {
+        // 只有窗口收在托盘或最小化时才发系统通知
+        var isOpen = Visible && WindowState != FormWindowState.Minimized;
+        if (isOpen) return;
+
+        _pendingAlertMachine = machineId;
+        _tray?.ShowBalloonTip(
+            6000,
+            "机房告警",
+            $"{machineId} · {text}",
+            ToolTipIcon.Warning);
+    }
+
+    private void FocusMachine(string machineId)
+    {
+        var core = _webView.CoreWebView2;
+        if (core is null) return;
+        var payload = $"{{\"type\":\"focus\",\"id\":\"{machineId}\"}}";
+        core.PostWebMessageAsString(payload);
+    }
+
+    private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        string? raw = null;
+        try { raw = e.TryGetWebMessageAsString(); }
+        catch { return; }
+
+        if (string.IsNullOrWhiteSpace(raw)) return;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("type", out var type) && type.GetString() == "alert")
+            {
+                var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? "" : "";
+                var text = root.TryGetProperty("text", out var textEl) ? textEl.GetString() ?? "" : "";
+                if (id.Length > 0) NotifyAlert(id, text);
+            }
+        }
+        catch (JsonException)
+        {
+            // 非 JSON 消息忽略
+        }
     }
 
     private void RestoreFromTray()
@@ -271,6 +326,7 @@ internal sealed class HostForm : Form
 
             // 页面内 window.open 一律开成独立的远程控制窗口
             var virtualHost = _server is null;
+            core.WebMessageReceived += OnWebMessage;
             core.NewWindowRequested += (_, e) =>
             {
                 e.Handled = true;

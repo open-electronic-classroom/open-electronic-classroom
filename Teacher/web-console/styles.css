@@ -2016,6 +2016,15 @@ dialog:focus-visible {
   place-items: center;
 }
 
+.toast.is-clickable {
+  cursor: pointer;
+}
+
+.toast.is-clickable:hover {
+  border-color: #fca5a5;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
+}
+
 .toast.is-warn {
   padding-right: 13px;
   border-color: #fde68a;

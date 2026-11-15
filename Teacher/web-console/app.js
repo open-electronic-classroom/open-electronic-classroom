@@ -145,11 +145,19 @@
     }
 
     if (Array.isArray(snapshot.machines)) {
+      // 首帧只记录已有告警，不弹提示（避免每次启动刷一堆）
+      const seeding = alertSeen.size === 0 && !alertSeeded;
+      alertSeeded = true;
       snapshot.machines.forEach((m) => {
+        if (seeding) {
+          if (m.state === "alert" && m.alert) alertSeen.set(m.id, m.alert);
+          return;
+        }
         const previous = alertSeen.get(m.id);
         if (m.state === "alert" && m.alert && m.alert !== previous) {
           alertSeen.set(m.id, m.alert);
-          toast(`${m.id} · ${m.alert}`, "error");
+          toast(`${m.id} · ${m.alert}`, "error", () => focusMachine(m.id));
+          postToHost({ type: "alert", id: m.id, text: m.alert });
         } else if (m.state !== "alert") {
           alertSeen.delete(m.id);
         }
@@ -231,7 +239,7 @@
     new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   // kind = "info"（自动消失）| "warn"（黄色警告，自动消失）| "error"（红色告警，手动关闭）
-  function toast(message, kind = "info") {
+  function toast(message, kind = "info", onActivate = null) {
     const isError = kind === "error";
     const isWarn = kind === "warn";
     const el = document.createElement("div");
@@ -246,6 +254,15 @@
     text.textContent = message;
 
     el.append(icon, text);
+
+    if (typeof onActivate === "function") {
+      el.classList.add("is-clickable");
+      el.addEventListener("click", (event) => {
+        if (event.target.closest(".toast-close")) return;
+        onActivate();
+        dismissToast(el);
+      });
+    }
 
     if (isError) {
       const close = document.createElement("button");
@@ -706,6 +723,38 @@
       saveRename();
     }
   });
+
+  /* 跳转到某台机器：切到监看墙并选中它 */
+  function focusMachine(id) {
+    if (!byId(id)) return;
+    state.view = "wall";
+    document.querySelectorAll(".rail-btn[data-view]").forEach((b) =>
+      b.classList.toggle("is-active", b.dataset.view === "wall")
+    );
+    state.selected = new Set([id]);
+    anchorId = id;
+    closeCtx();
+    render();
+    const el = document.querySelector(`.mon[data-id="${id}"]`);
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function postToHost(payload) {
+    const bridge = window.chrome && window.chrome.webview;
+    if (bridge && typeof bridge.postMessage === "function") bridge.postMessage(JSON.stringify(payload));
+  }
+
+  // 宿主点开系统通知后，转到对应机器
+  if (window.chrome && window.chrome.webview && window.chrome.webview.addEventListener) {
+    window.chrome.webview.addEventListener("message", (event) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data && data.type === "focus" && data.id) focusMachine(data.id);
+      } catch {
+        /* 忽略非 JSON 消息 */
+      }
+    });
+  }
 
   /* ---------------- 分组管理 ---------------- */
   function renderGroups() {
@@ -1789,6 +1838,7 @@
   let clickMark = { id: null, at: 0 };
   let inlineEdit = null;
   const alertSeen = new Map();
+  let alertSeeded = false;
 
   function openRemote(id) {
     const machine = byId(id);
