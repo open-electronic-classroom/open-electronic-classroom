@@ -235,6 +235,22 @@
     </form>
   </dialog>
 
+  <dialog class="modal modal-sm" id="noticeDialog">
+    <form method="dialog" class="modal-box">
+      <header class="modal-head">
+        <h2>发送通知</h2>
+        <span class="modal-hint" id="noticeTarget"></span>
+      </header>
+      <div class="modal-body">
+        <textarea class="input notice-input" id="noticeBody" rows="3" placeholder="通知内容" draggable="false"></textarea>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="button" class="btn btn-primary" id="noticeDialogSend">发送</button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog class="modal modal-sm" id="groupDialog">
     <form method="dialog" class="modal-box">
       <header class="modal-head">

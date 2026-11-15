@@ -79,6 +79,7 @@
   const confirmDialog = $("#confirmDialog");
   const renameDialog = $("#renameDialog");
   const groupDialog = $("#groupDialog");
+  const noticeDialog = $("#noticeDialog");
 
   /* ---------------- 后端接口 ----------------
      以 http(s) 打开时走后端（Python server），直接双击本地文件时自动退化为纯前端演示。 */
@@ -1313,6 +1314,7 @@
         ...(picked === 1 ? [{ label: "共享此机屏幕", icon: "i-screen", act: "cast" }] : []),
         { label: "文件分发", icon: "i-folder", act: "task-file" },
         { label: "文件收集", icon: "i-inbox", act: "task-collect" },
+        { label: "发送通知…", icon: "i-answer", act: "notice" },
         ...(picked === 1
           ? [
               { label: "远程控制", icon: "i-control", act: "remote" },
@@ -1404,6 +1406,10 @@
     }
     if (act === "terminal") {
       openTerminal(ctxMachine);
+      return;
+    }
+    if (act === "notice") {
+      openNoticeDialog([...state.selected]);
       return;
     }
     if (act === "task-file" || act === "task-collect") {
@@ -1975,6 +1981,34 @@
 
   $("#remoteCmdBtn").addEventListener("click", () => openTask("command"));
   $("#collectBtn").addEventListener("click", () => openTask("collect"));
+
+  /* 发送通知：右键给选中的一台或多台机器发文字通知 */
+  let noticeTargets = [];
+
+  function openNoticeDialog(targets) {
+    noticeTargets = [...targets];
+    $("#noticeTarget").textContent =
+      noticeTargets.length > 1 ? `${noticeTargets.length} 台` : noticeTargets[0] || "";
+    $("#noticeBody").value = "";
+    openDialog(noticeDialog);
+    window.setTimeout(() => $("#noticeBody").focus(), 60);
+  }
+
+  function sendNotice() {
+    const text = $("#noticeBody").value.trim();
+    if (!text) {
+      toast("通知内容不能为空", "error");
+      $("#noticeBody").focus();
+      return;
+    }
+    const label = noticeTargets.length > 1 ? `${noticeTargets.length} 台` : noticeTargets[0] || "未选机器";
+    log("发送通知", `${text} → ${label}`);
+    toast(`通知已发送 · ${label}`);
+    void API.send("notice", noticeTargets, { text });
+    closeDialog(noticeDialog);
+  }
+
+  $("#noticeDialogSend").addEventListener("click", sendNotice);
 
   /* 发送通知：把一段文字广播到所有学生屏幕 */
   $("#noticeSend").addEventListener("click", () => {
