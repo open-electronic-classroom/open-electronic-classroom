@@ -144,6 +144,18 @@
       state.selected = new Set([...state.selected].filter((id) => ids.has(id)));
     }
 
+    if (Array.isArray(snapshot.machines)) {
+      snapshot.machines.forEach((m) => {
+        const previous = alertSeen.get(m.id);
+        if (m.state === "alert" && m.alert && m.alert !== previous) {
+          alertSeen.set(m.id, m.alert);
+          toast(`${m.id} · ${m.alert}`, "error");
+        } else if (m.state !== "alert") {
+          alertSeen.delete(m.id);
+        }
+      });
+    }
+
     if (Array.isArray(snapshot.groups)) {
       state.groups = [...snapshot.groups];
     }
@@ -218,15 +230,16 @@
   const now = () =>
     new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  // kind = "info"（自动消失）| "error"（异常，必须手动关闭）
+  // kind = "info"（自动消失）| "warn"（黄色警告，自动消失）| "error"（红色告警，手动关闭）
   function toast(message, kind = "info") {
     const isError = kind === "error";
+    const isWarn = kind === "warn";
     const el = document.createElement("div");
-    el.className = `toast${isError ? " is-error" : ""}`;
+    el.className = `toast${isError ? " is-error" : isWarn ? " is-warn" : ""}`;
 
     const icon = document.createElement("span");
     icon.className = "toast-icon";
-    icon.textContent = isError ? "!" : "✓";
+    icon.textContent = isError ? "!" : isWarn ? "!" : "✓";
 
     const text = document.createElement("span");
     text.className = "toast-text";
@@ -642,7 +655,7 @@
   function renameMachine(from, value) {
     if (!value || value === from) return false;
     if (MACHINES.some((m) => m.id === value)) {
-      toast(`计算机名称 ${value} 已存在`, "error");
+      toast(`计算机名称 ${value} 已存在`, "warn");
       return false;
     }
     const machine = byId(from);
@@ -674,7 +687,7 @@
   function saveRename() {
     const value = $("#renameField").value.trim();
     if (!value) {
-      toast("名称不能为空", "error");
+      toast("名称不能为空", "warn");
       return;
     }
     if (value === renameTarget) {
@@ -813,11 +826,11 @@
   $("#groupSave").addEventListener("click", () => {
     const name = $("#groupField").value.trim().toUpperCase().slice(0, 8);
     if (!name) {
-      toast("分组名称不能为空", "error");
+      toast("分组名称不能为空", "warn");
       return;
     }
     if (state.groups.includes(name)) {
-      toast(`分组 ${name} 已存在`, "error");
+      toast(`分组 ${name} 已存在`, "warn");
       return;
     }
     state.groups.push(name);
@@ -889,7 +902,7 @@
 
   function clearBoard(skipConfirm) {
     if (state.strokes.length === 0) {
-      toast("画板已经是空的", "error");
+      toast("画板已经是空的", "warn");
       return;
     }
 
@@ -914,7 +927,7 @@
 
   function undoBoard() {
     if (state.strokes.length === 0) {
-      toast("没有可撤销的笔迹", "error");
+      toast("没有可撤销的笔迹", "warn");
       return;
     }
     state.strokes.pop();
@@ -1565,7 +1578,7 @@
   function openTask(type, targets) {
     const cfg = TASK[type];
     if (!cfg) {
-      toast(`这个操作还没接上：${type}`, "error");
+      toast(`这个操作还没接上：${type}`, "warn");
       return;
     }
     activeTask = type;
@@ -1775,12 +1788,13 @@
 
   let clickMark = { id: null, at: 0 };
   let inlineEdit = null;
+  const alertSeen = new Map();
 
   function openRemote(id) {
     const machine = byId(id);
     if (!machine) return;
     if (machine.state === "offline") {
-      toast(`${machine.id} 离线`, "error");
+      toast(`${machine.id} 离线`, "warn");
       return;
     }
     openRemoteWindow(machine.id);
@@ -1960,7 +1974,7 @@
 
   $("#mediaStart").addEventListener("click", () => {
     if (!mediaFile) {
-      toast("先选择要投放的文件", "error");
+      toast("先选择要投放的文件", "warn");
       return;
     }
     const name = mediaFile.name;
@@ -1997,7 +2011,7 @@
   function sendNotice() {
     const text = $("#noticeBody").value.trim();
     if (!text) {
-      toast("通知内容不能为空", "error");
+      toast("通知内容不能为空", "warn");
       $("#noticeBody").focus();
       return;
     }
@@ -2015,7 +2029,7 @@
     const field = $("#noticeText");
     const text = field.value.trim();
     if (!text) {
-      toast("通知内容不能为空", "error");
+      toast("通知内容不能为空", "warn");
       field.focus();
       return;
     }
@@ -2414,7 +2428,7 @@
       return;
     }
     if (policyDraftMode === "blockall") {
-      toast("完全禁止不需要预设", "error");
+      toast("完全禁止不需要预设", "warn");
       return;
     }
 

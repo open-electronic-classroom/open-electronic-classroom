@@ -2016,6 +2016,16 @@ dialog:focus-visible {
   place-items: center;
 }
 
+.toast.is-warn {
+  padding-right: 13px;
+  border-color: #fde68a;
+  background: #fffdf4;
+}
+
+.toast.is-warn .toast-icon {
+  background: #d97706;
+}
+
 .toast.is-error {
   padding-right: 32px;
   border-color: #fecaca;
