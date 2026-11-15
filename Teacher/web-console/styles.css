@@ -1987,6 +1987,7 @@ dialog:focus-visible {
 
 /* Windows 通知样式：白卡片 + 图标 + 文字，从右下角滑入 */
 .toast {
+  position: relative;
   display: flex;
   align-items: flex-start;
   width: 300px;
@@ -2016,6 +2017,7 @@ dialog:focus-visible {
 }
 
 .toast.is-error {
+  padding-right: 32px;
   border-color: #fecaca;
   background: #fffafa;
 }
@@ -2025,14 +2027,19 @@ dialog:focus-visible {
 }
 
 .toast-close {
-  margin-left: 2px;
-  padding: 0 2px;
-  align-self: flex-start;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   color: var(--text-3);
   background: none;
   border: 0;
+  border-radius: 4px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 18px;
+  text-align: center;
   cursor: pointer;
   pointer-events: auto;
 }
