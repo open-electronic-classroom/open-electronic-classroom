@@ -71,6 +71,7 @@ class Lab:
         self.casting = {"on": False, "source": "teacher", "scope": "all"}
         self.policy = {
             "usb": False,
+            "input": False,
             "blockNet": False,
             "block": True,
             "mode": "whitelist",   # whitelist | blacklist | blockall，只能启用一种
@@ -365,6 +366,7 @@ class Lab:
 
                 self.policy = {
                     "usb": bool(payload.get("usb", False)),
+                    "input": bool(payload.get("input", False)),
                     "blockNet": bool(payload.get("blockNet", False)),
                     "block": bool(payload.get("block", True)),
                     "mode": mode,
@@ -385,6 +387,8 @@ class Lab:
                     flags.append("禁止联网")
                 if self.policy["block"]:
                     flags.append("上网限制")
+                if self.policy["input"]:
+                    flags.append("锁定键鼠")
                 summary = "、".join(flags) if flags else "无限制"
 
                 if mode == "blockall":

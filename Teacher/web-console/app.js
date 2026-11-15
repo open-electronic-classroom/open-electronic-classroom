@@ -49,7 +49,7 @@
       { name: "教学白名单", mode: "whitelist", sites: ["edu.cn", "python.org", "code.org", "khanacademy.org"] },
       { name: "课间黑名单", mode: "blacklist", sites: ["game.example.com", "tiktok.com"] }
     ],
-    policy: { usb: false, blockNet: false, block: true, mode: "whitelist", preset: "教学白名单", log: false, procs: { mode: "block", list: ["game.exe"] } },
+    policy: { usb: false, blockNet: false, block: true, input: false, mode: "whitelist", preset: "教学白名单", log: false, procs: { mode: "block", list: ["game.exe"] } },
     locked: false,
     groups: ["A", "B"],
     strokes: [],
@@ -186,6 +186,7 @@
         usb: Boolean(snapshot.policy.usb),
         blockNet: Boolean(snapshot.policy.blockNet),
         block: Boolean(snapshot.policy.block),
+        input: Boolean(snapshot.policy.input),
         mode: ["whitelist", "blacklist", "blockall"].includes(snapshot.policy.mode)
           ? snapshot.policy.mode
           : "whitelist",
@@ -489,6 +490,7 @@
     $("#swUsb").checked = state.policy.usb;
     $("#swOffline").checked = state.policy.blockNet;
     $("#swInternet").checked = state.policy.block;
+    $("#swInput").checked = state.policy.input;
 
     const lockBtn = $("#lockToggleBtn");
     lockBtn.textContent = state.locked ? "解除锁屏" : "一键锁屏";
@@ -2154,7 +2156,8 @@
   const policySwitches = [
     ["#swUsb", "usb", "禁止 USB 传输"],
     ["#swOffline", "blockNet", "禁止联网"],
-    ["#swInternet", "block", "上网限制"]
+    ["#swInternet", "block", "上网限制"],
+    ["#swInput", "input", "锁定键盘鼠标"]
   ];
 
   function pushPolicy() {
