@@ -1970,7 +1970,7 @@ dialog:focus-visible {
   z-index: 90;
   display: flex;
   align-items: flex-end;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 8px;
   pointer-events: none;
 }
@@ -2003,6 +2003,32 @@ dialog:focus-visible {
   font-size: 13px;
   font-weight: 700;
   place-items: center;
+}
+
+.toast.is-error {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.toast.is-error .toast-icon {
+  background: #dc2626;
+}
+
+.toast-close {
+  margin-left: 2px;
+  padding: 0 2px;
+  align-self: flex-start;
+  color: var(--text-3);
+  background: none;
+  border: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.toast-close:hover {
+  color: #b91c1c;
 }
 
 .toast-text {

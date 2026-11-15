@@ -217,28 +217,44 @@
   const now = () =>
     new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  function toast(message) {
+  // kind = "info"（自动消失）| "error"（异常，必须手动关闭）
+  function toast(message, kind = "info") {
+    const isError = kind === "error";
     const el = document.createElement("div");
-    el.className = "toast";
+    el.className = `toast${isError ? " is-error" : ""}`;
 
     const icon = document.createElement("span");
     icon.className = "toast-icon";
-    icon.textContent = "✓";
+    icon.textContent = isError ? "!" : "✓";
 
     const text = document.createElement("span");
     text.className = "toast-text";
     text.textContent = message;
 
     el.append(icon, text);
-    toasts.appendChild(el);
-    while (toasts.children.length > 3) toasts.firstElementChild.remove();
 
-    window.setTimeout(() => {
-      el.style.transition = "opacity .16s ease, transform .16s ease";
-      el.style.opacity = "0";
-      el.style.transform = "translateX(24px)";
-      window.setTimeout(() => el.remove(), 180);
-    }, 2400);
+    if (isError) {
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "toast-close";
+      close.setAttribute("aria-label", "关闭");
+      close.textContent = "✕";
+      close.addEventListener("click", () => dismissToast(el));
+      el.appendChild(close);
+    }
+
+    toasts.appendChild(el);
+    while (toasts.children.length > 4) toasts.firstElementChild.remove();
+
+    if (!isError) window.setTimeout(() => dismissToast(el), 2400);
+  }
+
+  function dismissToast(el) {
+    if (!el.isConnected) return;
+    el.style.transition = "opacity .16s ease, transform .16s ease";
+    el.style.opacity = "0";
+    el.style.transform = "translateX(24px)";
+    window.setTimeout(() => el.remove(), 180);
   }
 
   function log(action, detail = "", localOnly = false) {
@@ -625,7 +641,7 @@
   function renameMachine(from, value) {
     if (!value || value === from) return false;
     if (MACHINES.some((m) => m.id === value)) {
-      toast(`计算机名称 ${value} 已存在`);
+      toast(`计算机名称 ${value} 已存在`, "error");
       return false;
     }
     const machine = byId(from);
@@ -657,7 +673,7 @@
   function saveRename() {
     const value = $("#renameField").value.trim();
     if (!value) {
-      toast("名称不能为空");
+      toast("名称不能为空", "error");
       return;
     }
     if (value === renameTarget) {
@@ -796,11 +812,11 @@
   $("#groupSave").addEventListener("click", () => {
     const name = $("#groupField").value.trim().toUpperCase().slice(0, 8);
     if (!name) {
-      toast("分组名称不能为空");
+      toast("分组名称不能为空", "error");
       return;
     }
     if (state.groups.includes(name)) {
-      toast(`分组 ${name} 已存在`);
+      toast(`分组 ${name} 已存在`, "error");
       return;
     }
     state.groups.push(name);
@@ -872,7 +888,7 @@
 
   function clearBoard(skipConfirm) {
     if (state.strokes.length === 0) {
-      toast("画板已经是空的");
+      toast("画板已经是空的", "error");
       return;
     }
 
@@ -897,7 +913,7 @@
 
   function undoBoard() {
     if (state.strokes.length === 0) {
-      toast("没有可撤销的笔迹");
+      toast("没有可撤销的笔迹", "error");
       return;
     }
     state.strokes.pop();
@@ -1543,7 +1559,7 @@
   function openTask(type, targets) {
     const cfg = TASK[type];
     if (!cfg) {
-      toast(`这个操作还没接上：${type}`);
+      toast(`这个操作还没接上：${type}`, "error");
       return;
     }
     activeTask = type;
@@ -1758,7 +1774,7 @@
     const machine = byId(id);
     if (!machine) return;
     if (machine.state === "offline") {
-      toast(`${machine.id} 离线`);
+      toast(`${machine.id} 离线`, "error");
       return;
     }
     openRemoteWindow(machine.id);
@@ -1938,7 +1954,7 @@
 
   $("#mediaStart").addEventListener("click", () => {
     if (!mediaFile) {
-      toast("先选择要投放的文件");
+      toast("先选择要投放的文件", "error");
       return;
     }
     const name = mediaFile.name;
@@ -2348,7 +2364,7 @@
       return;
     }
     if (policyDraftMode === "blockall") {
-      toast("完全禁止不需要预设");
+      toast("完全禁止不需要预设", "error");
       return;
     }
 
