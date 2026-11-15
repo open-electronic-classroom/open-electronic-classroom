@@ -220,10 +220,25 @@
   function toast(message) {
     const el = document.createElement("div");
     el.className = "toast";
-    el.textContent = message;
+
+    const icon = document.createElement("span");
+    icon.className = "toast-icon";
+    icon.textContent = "✓";
+
+    const text = document.createElement("span");
+    text.className = "toast-text";
+    text.textContent = message;
+
+    el.append(icon, text);
     toasts.appendChild(el);
     while (toasts.children.length > 3) toasts.firstElementChild.remove();
-    window.setTimeout(() => el.remove(), 2400);
+
+    window.setTimeout(() => {
+      el.style.transition = "opacity .16s ease, transform .16s ease";
+      el.style.opacity = "0";
+      el.style.transform = "translateX(24px)";
+      window.setTimeout(() => el.remove(), 180);
+    }, 2400);
   }
 
   function log(action, detail = "", localOnly = false) {
