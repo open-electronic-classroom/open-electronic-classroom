@@ -41,13 +41,13 @@ python app.py --host 0.0.0.0     # 允许局域网访问（学生端将来接这
 
 | action | payload | 效果 |
 | --- | --- | --- |
-| `cast` | `{on, source, scope}` | 开/关投屏，记录来源与范围 |
+| `cast` | `{on, source, scope}` | 开/关投屏。`source` 为 `teacher` 或某台机器 id（学生机投屏），非法值返回 400；`scope` 为 `all` / `selected` |
 | `power` | `{mode: on\|off\|restart}` | 目标机器 → 空闲 / 离线 / 使用中 |
 | `lock` / `unlock` | — | 目标机器置为 `locked` / `active` |
 | `blank` | `{on}` | 黑屏肃静的开关标记 |
 | `remote` / `demo` | — | 只记录日志（真实实现时这里下发接管/转播） |
 | `task` | `{title, detail}` | 文件 / 网址 / 程序下发，记录日志 |
-| `policy` | `{block, log, whitelist[]}` | 覆盖访问策略 |
+| `policy` | `{usb, blockNet, block, mode, preset, log, sites[], presets[]}` | 覆盖访问策略。`mode` = `whitelist` / `blacklist` / `blockall` 三选一 |
 | `settings` | `{defaultSource, columns}` | 覆盖控制台设置 |
 
 ## 状态模型

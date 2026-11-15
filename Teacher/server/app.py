@@ -29,21 +29,21 @@ WEB_ROOT = TEACHER_ROOT / "web-console"
 ICON_ROOT = TEACHER_ROOT / "icon"
 
 MACHINE_TEMPLATE = [
-    {"id": "PC-01", "user": "陈一诺", "ip": "192.168.10.11", "row": "A", "state": "active"},
-    {"id": "PC-02", "user": "林小满", "ip": "192.168.10.12", "row": "A", "state": "active"},
-    {"id": "PC-03", "user": "周予安", "ip": "192.168.10.13", "row": "A", "state": "locked"},
-    {"id": "PC-04", "user": "许星河", "ip": "192.168.10.14", "row": "A", "state": "alert"},
-    {"id": "PC-05", "user": "沈知夏", "ip": "192.168.10.15", "row": "A", "state": "idle"},
-    {"id": "PC-06", "user": "", "ip": "192.168.10.16", "row": "A", "state": "offline"},
-    {"id": "PC-07", "user": "唐可欣", "ip": "192.168.10.17", "row": "B", "state": "active"},
-    {"id": "PC-08", "user": "贺嘉树", "ip": "192.168.10.18", "row": "B", "state": "active"},
-    {"id": "PC-09", "user": "江语澄", "ip": "192.168.10.19", "row": "B", "state": "idle"},
-    {"id": "PC-10", "user": "陆景行", "ip": "192.168.10.20", "row": "B", "state": "alert"},
-    {"id": "PC-11", "user": "苏念安", "ip": "192.168.10.21", "row": "B", "state": "active"},
-    {"id": "PC-12", "user": "", "ip": "192.168.10.22", "row": "B", "state": "offline"},
+    {"id": "PC-01", "ip": "192.168.10.11", "row": "A", "state": "online", "task": "第二套 · 循环结构", "submitted": False},
+    {"id": "PC-02", "ip": "192.168.10.12", "row": "A", "state": "submitted", "task": "第二套 · 循环结构", "submitted": True},
+    {"id": "PC-03", "ip": "192.168.10.13", "row": "A", "state": "locked"},
+    {"id": "PC-04", "ip": "192.168.10.14", "row": "A", "state": "alert", "alert": "检测到非教学程序：game.exe"},
+    {"id": "PC-05", "ip": "192.168.10.15", "row": "A", "state": "online"},
+    {"id": "PC-06", "ip": "192.168.10.16", "row": "A", "state": "offline"},
+    {"id": "PC-07", "ip": "192.168.10.17", "row": "B", "state": "online", "task": "第二套 · 循环结构", "submitted": False},
+    {"id": "PC-08", "ip": "192.168.10.18", "row": "B", "state": "online"},
+    {"id": "PC-09", "ip": "192.168.10.19", "row": "B", "state": "submitted", "task": "第二套 · 循环结构", "submitted": True},
+    {"id": "PC-10", "ip": "192.168.10.20", "row": "B", "state": "alert", "alert": "检测到非教学程序：minigame.exe"},
+    {"id": "PC-11", "ip": "192.168.10.21", "row": "B", "state": "online"},
+    {"id": "PC-12", "ip": "192.168.10.22", "row": "B", "state": "offline"},
 ]
 
-VALID_STATES = {"active", "idle", "locked", "alert", "offline"}
+VALID_STATES = {"online", "locked", "alert", "submitted", "offline"}
 MAX_LOG = 80
 
 
@@ -52,15 +52,42 @@ class Lab:
 
     def __init__(self) -> None:
         self.lock = threading.RLock()
-        self.machines = [dict(m) for m in MACHINE_TEMPLATE]
-        for m in self.machines:
-            m["blank"] = False
+        # 机房只认编号：机号 + IP + 排 + 状态
+        self.machines = [
+            {"id": "PC-01", "ip": "192.168.10.11", "row": "A", "state": "online", "task": "第二套 · 循环结构", "submitted": False},
+            {"id": "PC-02", "ip": "192.168.10.12", "row": "A", "state": "submitted", "task": "第二套 · 循环结构", "submitted": True},
+            {"id": "PC-03", "ip": "192.168.10.13", "row": "A", "state": "locked"},
+            {"id": "PC-04", "ip": "192.168.10.14", "row": "A", "state": "alert", "alert": "检测到非教学程序：game.exe"},
+            {"id": "PC-05", "ip": "192.168.10.15", "row": "A", "state": "online"},
+            {"id": "PC-06", "ip": "192.168.10.16", "row": "A", "state": "offline"},
+            {"id": "PC-07", "ip": "192.168.10.17", "row": "B", "state": "online", "task": "第二套 · 循环结构", "submitted": False},
+            {"id": "PC-08", "ip": "192.168.10.18", "row": "B", "state": "online"},
+            {"id": "PC-09", "ip": "192.168.10.19", "row": "B", "state": "submitted", "task": "第二套 · 循环结构", "submitted": True},
+            {"id": "PC-10", "ip": "192.168.10.20", "row": "B", "state": "alert", "alert": "检测到非教学程序：minigame.exe"},
+            {"id": "PC-11", "ip": "192.168.10.21", "row": "B", "state": "online"},
+            {"id": "PC-12", "ip": "192.168.10.22", "row": "B", "state": "offline"},
+        ]
+
         self.casting = {"on": False, "source": "teacher", "scope": "all"}
         self.policy = {
+            "usb": False,
+            "blockNet": False,
             "block": True,
+            "mode": "whitelist",   # whitelist | blacklist | blockall，只能启用一种
+            "preset": "教学白名单",
             "log": False,
-            "whitelist": ["edu.cn", "python.org", "code.org", "khanacademy.org"],
+            "sites": ["edu.cn", "python.org", "code.org", "khanacademy.org"],
+            "procs": {"mode": "block", "list": ["game.exe"]},
+            "presets": [
+                {"name": "教学白名单", "mode": "whitelist",
+                 "sites": ["edu.cn", "python.org", "code.org", "khanacademy.org"]},
+                {"name": "课间黑名单", "mode": "blacklist",
+                 "sites": ["game.example.com", "tiktok.com"]},
+            ],
         }
+        self.groups = ["A", "B"]
+        self.screen_lock = {"on": False, "message": "上课中，请勿操作"}
+        self.whiteboard = {"strokes": []}
         self.settings = {"defaultSource": "整个屏幕", "columns": "自动"}
         self.log: list[dict] = []
         self.clients: set[queue.Queue] = set()
@@ -79,7 +106,20 @@ class Lab:
                 "teacher": {"host": "TEACHER-01", "ip": "192.168.10.2"},
                 "machines": [dict(m) for m in self.machines],
                 "casting": dict(self.casting),
-                "policy": {**self.policy, "whitelist": list(self.policy["whitelist"])},
+                "groups": list(self.groups),
+                "policy": {
+                    **self.policy,
+                    "sites": list(self.policy["sites"]),
+                    "procs": {
+                        "mode": self.policy["procs"]["mode"],
+                        "list": list(self.policy["procs"]["list"]),
+                    },
+                    "presets": [
+                        {**preset, "sites": list(preset["sites"])} for preset in self.policy["presets"]
+                    ],
+                },
+                "screen_lock": dict(self.screen_lock),
+                "whiteboard": {"strokes": [dict(stroke) for stroke in self.whiteboard["strokes"]]},
                 "settings": dict(self.settings),
                 "log": [dict(e) for e in self.log[:40]],
             }
@@ -108,24 +148,39 @@ class Lab:
     # ---------- 命令 ----------
     def command(self, action: str, machine_ids: list[str], payload: dict) -> dict:
         ids = set(machine_ids or [])
-        targets = [m for m in self.machines if not ids or m["id"] in ids]
+        # 不指定机器时：开机针对离线机器，其余动作针对全部在线机器
+        power_on = action == "power" and payload.get("mode") == "on"
+        targets = [
+            m for m in self.machines
+            if (m["id"] in ids)
+            or (not ids and (m["state"] == "offline" if power_on else m["state"] != "offline"))
+        ]
 
         with self.lock:
             if action == "cast":
+                source = str(payload.get("source", self.casting["source"]))
+                known = {"teacher"} | {m["id"] for m in self.machines}
+                if source not in known:
+                    raise ValueError(f"unknown cast source: {source}")
+
+                previous = dict(self.casting)
                 self.casting = {
                     "on": bool(payload.get("on", True)),
-                    "source": payload.get("source", self.casting["source"]),
+                    "source": source,
                     "scope": payload.get("scope", self.casting["scope"]),
                 }
-                src = "教师机" if self.casting["source"] == "teacher" else "学生机"
-                if self.casting["on"]:
-                    self._log("投屏开始", f"{src} · {len(targets)} 台")
-                else:
-                    self._log("投屏停止", "")
+                src = "教师机" if source == "teacher" else f"学生机 {source}"
+                if self.casting["on"] != previous["on"]:
+                    if self.casting["on"]:
+                        # 全屏投送：学生端锁输入、只能观看
+                        self._log("屏幕共享开始", f"{src} 全屏 · {len(targets)} 台")
+                    else:
+                        self._log("屏幕共享停止", "")
+
 
             elif action == "power":
                 mode = payload.get("mode", "off")
-                state = {"on": "idle", "off": "offline", "restart": "active"}.get(mode, "offline")
+                state = {"on": "online", "off": "offline", "restart": "online"}.get(mode, "offline")
                 for m in targets:
                     m["state"] = state
                     if state == "offline":
@@ -136,10 +191,21 @@ class Lab:
                 )
 
             elif action in ("lock", "unlock"):
-                state = "locked" if action == "lock" else "active"
+                on = action == "lock"
+                message = str(payload.get("message", self.screen_lock["message"]))
+                self.screen_lock = {"on": on, "message": message}
                 for m in targets:
-                    m["state"] = state
-                self._log("锁定屏幕" if action == "lock" else "解锁屏幕", f"→ {len(targets)} 台")
+                    if on:
+                        # 记住锁定前的状态，解锁时还原（异常不会被抹成在线）
+                        if m["state"] not in ("locked", "offline"):
+                            m["prev_state"] = m["state"]
+                        m["state"] = "locked"
+                    else:
+                        m["state"] = m.pop("prev_state", "online")
+                if on:
+                    self._log("一键锁屏", f"{message} · {len(targets)} 台")
+                else:
+                    self._log("解除锁屏", f"→ {len(targets)} 台")
 
             elif action == "blank":
                 on = bool(payload.get("on", True))
@@ -147,19 +213,181 @@ class Lab:
                     m["blank"] = on
                 self._log("黑屏肃静 开启" if on else "黑屏肃静 关闭", f"→ {len(targets)} 台")
 
+            elif action == "group":
+                group = str(payload.get("group", "")).strip().upper()[:8]
+                for m in targets:
+                    m["row"] = group
+                self._log("修改分组", f"→ {group or '未分组'} · {len(targets)} 台")
+
+            elif action == "group-add":
+                name = str(payload.get("name", "")).strip().upper()[:8]
+                if not name:
+                    raise ValueError("empty group name")
+                if name in self.groups:
+                    raise ValueError("group exists")
+                self.groups.append(name)
+                self._log("新建分组", f"{name} 组")
+
+            elif action == "group-remove":
+                name = str(payload.get("name", "")).strip().upper()[:8]
+                if name not in self.groups:
+                    raise ValueError("group not found")
+                self.groups.remove(name)
+                moved = 0
+                for m in self.machines:
+                    if m["row"] == name:
+                        m["row"] = ""
+                        moved += 1
+                self._log("删除分组", f"{name} 组 · {moved} 台转入未分组")
+
+            elif action == "label":
+                on = bool(payload.get("on", True))
+                for m in targets:
+                    m["label"] = on
+                self._log("显示机号" if on else "隐藏机号", f"{len(targets)} 台")
+
+            elif action == "proc":
+                process = str(payload.get("process", "")).strip()[:64]
+                rule = self.policy.get("procs") or {}
+                watch = rule.get("list") or []
+                if process and process in watch:
+                    for m in targets:
+                        m["state"] = "alert"
+                        m["alert"] = f"检测到 {process}"
+                        m["blocked"] = rule.get("mode") == "block"
+                    if rule.get("mode") == "block":
+                        self._log("拦截程序", f"{process} · {len(targets)} 台")
+                    else:
+                        self._log("待处理程序", f"{process} · {len(targets)} 台")
+                else:
+                    self._log("程序上报", f"{process or '未知'} · 未命中策略")
+
+            elif action == "rename":
+                old_id = str(payload.get("from", "")).strip()
+                new_id = str(payload.get("to", "")).strip()
+                if not new_id or len(new_id) > 16:
+                    raise ValueError("invalid machine id")
+                target = next((m for m in self.machines if m["id"] == old_id), None)
+                if target is None:
+                    raise ValueError(f"machine not found: {old_id}")
+                if any(m["id"] == new_id for m in self.machines):
+                    raise ValueError(f"machine id already exists: {new_id}")
+                target["id"] = new_id
+                self._log("重命名", f"{old_id} → {new_id}")
+
+            elif action == "board-draw":
+                stroke = payload.get("stroke") or {}
+                points = [
+                    [round(float(pt[0]), 1), round(float(pt[1]), 1)]
+                    for pt in (stroke.get("points") or [])
+                    if isinstance(pt, (list, tuple)) and len(pt) == 2
+                ][:600]
+                if not points:
+                    raise ValueError("stroke without points")
+
+                self.whiteboard["strokes"].append({
+                    "color": str(stroke.get("color", "#0f172a"))[:16],
+                    "width": max(1.0, min(40.0, float(stroke.get("width", 3)))),
+                    "points": points,
+                })
+                del self.whiteboard["strokes"][:-120]
+                self._log("白板笔迹", f"{len(self.whiteboard['strokes'])} 笔")
+
+            elif action == "board-sync":
+                # 开始共享时把本地已有的画稿整块推给服务端
+                strokes = []
+                for stroke in (payload.get("strokes") or [])[:120]:
+                    if not isinstance(stroke, dict):
+                        continue
+                    points = [
+                        [round(float(pt[0]), 1), round(float(pt[1]), 1)]
+                        for pt in (stroke.get("points") or [])
+                        if isinstance(pt, (list, tuple)) and len(pt) == 2
+                    ][:600]
+                    if not points:
+                        continue
+                    strokes.append({
+                        "color": str(stroke.get("color", "#0f172a"))[:16],
+                        "width": max(1.0, min(40.0, float(stroke.get("width", 3)))),
+                        "points": points,
+                    })
+                self.whiteboard["strokes"] = strokes
+                self._log("白板同步", f"{len(strokes)} 笔")
+
+            elif action == "board-clear":
+                self.whiteboard["strokes"] = []
+                self._log("白板清空", "")
+
             elif action in ("remote", "demo"):
-                self._log("远程控制" if action == "remote" else "学生演示", f"→ {len(targets)} 台")
+                name = "远程控制" if action == "remote" else "学生演示"
+                # 只有一台时直接记机号，多台才记数量
+                target_text = targets[0]["id"] if len(targets) == 1 else f"{len(targets)} 台"
+                self._log(name, f"→ {target_text}")
+
+            elif action in ("media", "board", "quiz"):
+                name = {"media": "媒体共享", "board": "白板共享", "quiz": "在线答题"}[action]
+                if action == "quiz":
+                    self._log(name, f"→ {len(targets)} 台")
+                elif action == "media" and payload.get("on", True):
+                    media = str(payload.get("file", "")).strip()
+                    detail = f"{media} → {len(targets)} 台" if media else f"→ {len(targets)} 台"
+                    self._log("媒体共享 开始", detail)
+                else:
+                    state_text = "开启" if payload.get("on", True) else "关闭"
+                    self._log(f"{name} {state_text}", f"→ {len(targets)} 台")
 
             elif action == "task":
                 self._log(payload.get("title", "下发任务"), payload.get("detail", ""))
 
             elif action == "policy":
+                mode = payload.get("mode")
+                if mode not in ("whitelist", "blacklist", "blockall"):
+                    mode = "whitelist"
+
+                presets = []
+                for preset in payload.get("presets", []) or []:
+                    if not isinstance(preset, dict):
+                        continue
+                    name = str(preset.get("name", "")).strip()[:20]
+                    if not name:
+                        continue
+                    presets.append({
+                        "name": name,
+                        "mode": "blacklist" if preset.get("mode") == "blacklist" else "whitelist",
+                        "sites": [str(site) for site in preset.get("sites", [])][:200],
+                    })
+
                 self.policy = {
+                    "usb": bool(payload.get("usb", False)),
+                    "blockNet": bool(payload.get("blockNet", False)),
                     "block": bool(payload.get("block", True)),
+                    "mode": mode,
+                    "preset": str(payload.get("preset", ""))[:20],
                     "log": bool(payload.get("log", False)),
-                    "whitelist": [str(s) for s in payload.get("whitelist", [])],
+                    "sites": [str(site) for site in payload.get("sites", [])][:200],
+                    "presets": presets,
+                    "procs": {
+                        "mode": "report" if (payload.get("procs") or {}).get("mode") == "report" else "block",
+                        "list": [str(n)[:64] for n in ((payload.get("procs") or {}).get("list") or [])][:200],
+                    },
                 }
-                self._log("白名单保存", f"{len(self.policy['whitelist'])} 个域名")
+
+                flags = []
+                if self.policy["usb"]:
+                    flags.append("禁止USB")
+                if self.policy["blockNet"]:
+                    flags.append("禁止联网")
+                if self.policy["block"]:
+                    flags.append("上网限制")
+                summary = "、".join(flags) if flags else "无限制"
+
+                if mode == "blockall":
+                    detail = f"{summary} · 完全禁止"
+                else:
+                    mode_text = "白名单" if mode == "whitelist" else "黑名单"
+                    preset_text = f"（{self.policy['preset']}）" if self.policy["preset"] else ""
+                    detail = f"{summary} · {mode_text} {len(self.policy['sites'])} 个{preset_text}"
+                self._log("策略更新", detail)
 
             elif action == "settings":
                 self.settings = {
@@ -187,14 +415,14 @@ class Lab:
             if roll < 0.4 and online:
                 m = random.choice(online)
                 if m["state"] == "alert":
-                    m["state"] = "active"
+                    m["state"] = "online"
                     self._log("恢复", f"{m['id']} 关闭了非教学程序")
                 else:
                     m["state"] = "alert"
                     self._log("异常", f"{m['id']} 检测到非教学程序")
             elif roll < 0.55 and offline:
                 m = random.choice(offline)
-                m["state"] = "idle"
+                m["state"] = "online"
                 self._log("上线", m["id"])
             else:
                 return
