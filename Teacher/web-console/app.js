@@ -254,6 +254,7 @@
   function openDialog(dialog) {
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    window.requestAnimationFrame(syncAllSegThumbs);
   }
 
   function closeDialog(dialog) {
@@ -2128,6 +2129,8 @@
     );
     $("#policyAccessPane").hidden = policyTab !== "access";
     $("#policyProcPane").hidden = policyTab !== "proc";
+    // 切页签会改变可见性，整页滑块一起重算
+    window.requestAnimationFrame(syncAllSegThumbs);
   }
 
   function renderProcTags(list) {
@@ -2151,6 +2154,7 @@
     [...$("#procModeSeg").children].forEach((b) =>
       b.classList.toggle("is-active", b.dataset.proc === policyDraftProcMode)
     );
+    window.requestAnimationFrame(() => syncSegThumb($("#procModeSeg")));
   }
 
   $("#policyTabSeg").addEventListener("click", (event) => {
@@ -2218,6 +2222,7 @@
     });
     $("#policyLog").disabled = blocked;
     $("#policyLogRow").classList.toggle("is-disabled", blocked);
+    window.requestAnimationFrame(() => syncSegThumb($("#policyModeSeg")));
   }
 
   function paintPresetSelect() {
